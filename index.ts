@@ -45,18 +45,26 @@ io.on("connection", (socket: Socket) => {
     }
   })
 
+  socket.on("draw-from-pile", (response) => {
+    if (game.activePlayerId === socket.id && !(game.pickedUpCard)) {
+      const card = takeCardFromTopOfPile();
+      response(card, game.pile[0]);
+      game.pickedUpCard=card;
+    }
+  })
+
   socket.on("hand-card-swap", (placement: number) => {
     if (game.activePlayerId === socket.id && game.pickedUpCard) {
       const p = game.players.find((p) => p.id === socket.id);
       if (p) {
         const c = p.cards.find(c => c.placement === placement);
         if (c) {
+          game.pile.unshift({suit: c.suit, value: c.value});
           c.suit = game.pickedUpCard.suit;
           c.value = game.pickedUpCard.value;
-          game.pile.unshift({suit: c.suit, value: c.value});
           game.pickedUpCard = undefined;
         }
-        io.to("Lobby").emit("hand-card-swap", socket.id, placement, game.pile[0])
+        io.to("Lobby").emit("hand-card-swap", socket.id, placement, c)
         endTurn();
       }
     }
@@ -161,6 +169,15 @@ function takeCardFromTopOfDeck():Card {
   }
   return card;
 }
+
+function takeCardFromTopOfPile():Card {
+  const card = game.pile.shift();
+  if (card === undefined) {
+    throw new Error("Cant take card from empty pile.");
+  }
+  return card;
+}
+
 
 function getRandomCards(n :number):GameCard[] {
   const cards:GameCard[] = [];
