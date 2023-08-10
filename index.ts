@@ -53,6 +53,15 @@ io.on("connection", (socket: Socket) => {
     }
   })
 
+  socket.on("put-on-pile", (ack) => {
+    if (game.activePlayerId === socket.id && game.pickedUpCard) {
+      ack();
+      game.pile.unshift(game.pickedUpCard)
+      io.to("Lobby").emit("update-topcard", game.pile[0])
+      endTurn();
+    }
+  })
+
   socket.on("hand-card-swap", (placement: number) => {
     if (game.activePlayerId === socket.id && game.pickedUpCard) {
       const p = game.players.find((p) => p.id === socket.id);
