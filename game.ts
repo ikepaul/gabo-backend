@@ -44,6 +44,7 @@ interface Game {
   activePlayerId: string;
   pile: Card[];
   pickedUpCard: Card |undefined;
+  deck: Card[];
 }
 
 interface GameDTO {
@@ -51,12 +52,13 @@ interface GameDTO {
   activePlayerId: string;
   topCard: Card | undefined;
   players: PlayerDTO[];
+  deckSize: number;
 }
 
 function gameToDTO(g:Game):GameDTO {
-  const {state, players, activePlayerId, pile} = {...g};
+  const {state, players, activePlayerId, pile,deck} = {...g};
 
-  return {state, players, activePlayerId, topCard: pile[0]}
+  return {state, players, activePlayerId, topCard: pile[0], deckSize: deck.length}
 }
 
 

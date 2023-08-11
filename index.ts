@@ -2,8 +2,9 @@ import { createServer } from "http";
 import { Server, Socket } from "socket.io";
 import {Card, Game, GameCard, Player, Suit, Value, gameToDTO} from "./game";
 
-const game:Game = {players: [], activePlayerId: "", pickedUpCard: undefined, pile: [],state: "Waiting"};
-let gameDeck:Card[] = getRandomDeck();
+const numOfPlayers = 2;
+
+const game:Game = {players: [], activePlayerId: "", pickedUpCard: undefined, pile: [],deck: [],state: "Waiting"};
 const waitingRoom: string[] = [];
 
 const httpServer = createServer();
@@ -25,7 +26,7 @@ io.on("connection", (socket: Socket) => {
 
   console.log(socket.id + " connected")
   let numInLobby: number | undefined =io.sockets.adapter.rooms.get("Lobby")?.size 
-  if (numInLobby === undefined || numInLobby < 2) {
+  if (numInLobby === undefined || numInLobby < numOfPlayers) {
     socket.join("Lobby");
   }
   else {
@@ -39,9 +40,15 @@ io.on("connection", (socket: Socket) => {
 
   socket.on("draw-from-deck", (response) => {
     if (game.activePlayerId === socket.id && !(game.pickedUpCard)) {
+      
       const card = takeCardFromTopOfDeck();
-      response(card);
       game.pickedUpCard=card;
+
+      if (game.deck.length == 0) {
+        game.deck = shuffle(game.pile.splice(1));
+      }
+      io.to("Lobby").emit("draw-from-deck", (game.deck.length))
+      response(card);
     }
   })
 
@@ -96,7 +103,7 @@ io.of("/").adapter.on("join-room", (room,id) => {
       console.log(id + " joined lobby");
       game.players.push({id, cards:[]})
       let numInLobby: number | undefined =io.sockets.adapter.rooms.get("Lobby")?.size 
-      if (numInLobby == 2) {
+      if (numInLobby == numOfPlayers) {
         startGame();
       }
   }
@@ -122,7 +129,7 @@ function addFromWaitingRoom() {
 }
 
 function startGame() {
-  gameDeck = getRandomDeck();
+  game.deck = getRandomDeck();
   dealCards();
   game.activePlayerId = game.players[0].id;
   game.pickedUpCard = undefined;
@@ -145,13 +152,14 @@ function getRandomDeck ():Card[] {
 }
 
 function shuffle(d:Card[]):Card[] {
-  for (let i = d.length - 1; i > 0; i--) {
+  const deck = [...d];
+  for (let i = deck.length - 1; i > 0; i--) {
     let j = Math.floor(Math.random() * i);
-    let temp = d[i];
-    d[i] = d[j];
-    d[j] = temp;
+    let temp = deck[i];
+    deck[i] = deck[j];
+    deck[j] = temp;
   }
-  return d;
+  return deck;
 }
 
 function dealCards() {
@@ -172,7 +180,7 @@ function takeCardsFromTopOfDeck(n:number):Card[] {
 } 
 
 function takeCardFromTopOfDeck():Card {
-  const card = gameDeck.pop();
+  const card = game.deck.pop();
   if (card === undefined) {
     throw new Error("Cant take card from empty deck.");
   }
