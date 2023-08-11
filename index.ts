@@ -34,8 +34,23 @@ io.on("connection", (socket: Socket) => {
     waitingRoom.push(socket.id);
   }
 
-  socket.on("card-click", (card:GameCard,ownerId:string, clickerId: string) => {
-    console.log(card, ownerId, clickerId);
+  socket.on("card-flip", (card:GameCard,ownerId:string, clickerId: string) => {
+    console.log(card);
+    console.log(topCard());
+    
+    if (topCard().value == card.value) {
+      const owner = game.players.find(p => p.id === ownerId);
+      const cardIndex = owner?.cards.findIndex(c => c.placement === card.placement);
+      if (cardIndex !== undefined) {
+        owner?.cards.splice(cardIndex, 1);
+        game.pile.unshift({suit: card.suit, value: card.value});
+        console.log(topCard());
+        io.to("Lobby").emit("card-flip",topCard(), ownerId, card.placement);
+        if (ownerId !== clickerId) {
+          //Clicker chooses a card to give to owner.
+        }
+      }
+    }
   })
 
   socket.on("draw-from-deck", (response) => {
@@ -53,7 +68,7 @@ io.on("connection", (socket: Socket) => {
   })
 
   socket.on("draw-from-pile", (response) => {
-    if (game.activePlayerId === socket.id && !(game.pickedUpCard)) {
+    if (game.activePlayerId === socket.id && !(game.pickedUpCard) && topCard()) {
       const card = takeCardFromTopOfPile();
       response(card, game.pile[0]);
       game.pickedUpCard=card;
@@ -86,6 +101,10 @@ io.on("connection", (socket: Socket) => {
     }
   })
 });
+
+function topCard():Card {
+  return game.pile[0];
+}
 
 function endTurn() {
   const currentIndex:number = game.players.findIndex((p) => p.id === game.activePlayerId);
