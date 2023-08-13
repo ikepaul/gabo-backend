@@ -48,6 +48,7 @@ io.on("connection", (socket: Socket) => {
           
           opponent.cards.push({...card, placement: ag.placement})
           io.to("Lobby").emit("give-card", {placement, ownerId: socket.id}, ag)
+          socket.emit("timeout-give", ag.ownerId, card.placement);
         }
       }
     }
@@ -65,7 +66,7 @@ io.on("connection", (socket: Socket) => {
           const clicker = game.players.find(p => p.id === clickerId);
           if (clicker) {
             clicker.availableGives.push({ownerId, placement: card.placement});
-            response("none")
+            response(TIME_TO_GIVE)
             setTimeout(() => {
               const index = clicker.availableGives.findIndex(ag => ag.ownerId === ownerId && ag.placement === card.placement);
               if (index !== -1) {
@@ -75,9 +76,6 @@ io.on("connection", (socket: Socket) => {
               socket.emit("timeout-give", ownerId, card.placement);
             },5000)
           }
-        }
-        else {
-          response("none")
         }
       }
     }
