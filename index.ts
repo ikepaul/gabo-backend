@@ -4,6 +4,8 @@ import {Card, Game, GameCard, Player, Suit, Value, gameToDTO} from "./game";
 
 const numOfPlayers = 2;
 
+const TIME_TO_GIVE = 5000;
+
 const game:Game = {players: [], activePlayerId: "", pickedUpCard: undefined, pile: [],deck: [],state: "Waiting"};
 const waitingRoom: string[] = [];
 
@@ -34,22 +36,53 @@ io.on("connection", (socket: Socket) => {
     waitingRoom.push(socket.id);
   }
 
-  socket.on("card-flip", (card:GameCard,ownerId:string, clickerId: string) => {
-    console.log(card);
-    console.log(topCard());
-    
+  socket.on("give-card", (placement: number) => {
+    const player = game.players.find(p => p.id === socket.id);
+    if (player !== undefined) {
+      if (player.availableGives.length > 0) {
+        const ag = player.availableGives.shift();
+        const opponent = game.players.find(p => p.id === ag?.ownerId);
+        if (ag !== undefined && opponent!==undefined) {
+          const index = player.cards.findIndex(c => c.placement === placement)
+          const [card] = player.cards.splice(index, 1);
+          
+          opponent.cards.push({...card, placement: ag.placement})
+          io.to("Lobby").emit("give-card", {placement, ownerId: socket.id}, ag)
+        }
+      }
+    }
+  })
+
+  socket.on("card-flip", (card:GameCard,ownerId:string, clickerId: string, response) => { 
     if (topCard().value == card.value) {
       const owner = game.players.find(p => p.id === ownerId);
       const cardIndex = owner?.cards.findIndex(c => c.placement === card.placement);
       if (cardIndex !== undefined) {
         owner?.cards.splice(cardIndex, 1);
         game.pile.unshift({suit: card.suit, value: card.value});
-        console.log(topCard());
         io.to("Lobby").emit("card-flip",topCard(), ownerId, card.placement);
         if (ownerId !== clickerId) {
-          //Clicker chooses a card to give to owner.
+          const clicker = game.players.find(p => p.id === clickerId);
+          if (clicker) {
+            clicker.availableGives.push({ownerId, placement: card.placement});
+            response("none")
+            setTimeout(() => {
+              const index = clicker.availableGives.findIndex(ag => ag.ownerId === ownerId && ag.placement === card.placement);
+              if (index !== -1) {
+                clicker.availableGives.splice(index,1);
+              }
+
+              socket.emit("timeout-give", ownerId, card.placement);
+            },5000)
+          }
+        }
+        else {
+          response("none")
         }
       }
+    }
+    else {
+      //Punishment card
     }
   })
 
@@ -120,7 +153,7 @@ io.of("/").adapter.on("join-room", (room,id) => {
   switch (room) {
     case "Lobby":
       console.log(id + " joined lobby");
-      game.players.push({id, cards:[]})
+      game.players.push({id, cards:[], availableGives: []})
       let numInLobby: number | undefined =io.sockets.adapter.rooms.get("Lobby")?.size 
       if (numInLobby == numOfPlayers) {
         startGame();
@@ -149,6 +182,7 @@ function addFromWaitingRoom() {
 
 function startGame() {
   game.deck = getRandomDeck();
+  game.players.forEach(p => p.availableGives=[]);
   dealCards();
   game.activePlayerId = game.players[0].id;
   game.pickedUpCard = undefined;

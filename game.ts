@@ -25,9 +25,15 @@ interface GameCard extends Card{
   placement: number
 }
 
+interface InfoGive {
+  ownerId: string;
+  placement: number;
+}
+
 interface Player {
-  id: string,
-  cards: GameCard[]
+  id: string;
+  cards: GameCard[];
+  availableGives: InfoGive[];
 }
 
 interface PlayerDTO {
