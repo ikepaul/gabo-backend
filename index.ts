@@ -1,10 +1,12 @@
 import { createServer } from "http";
 import { Server, Socket } from "socket.io";
-import {Card, Game, GameCard, Player, Suit, Value, gameToDTO} from "./game";
+import {Card, Game, GameCard, InfoGive, Player, Suit, Value, gameToDTO} from "./game";
 
 const numOfPlayers = 2;
 
-const TIME_TO_GIVE = 5000;
+const TOTAL_TIME_TO_GIVE = 5000;
+const UPDATE_DELAY_TO_GIVE = 200;
+
 
 const game:Game = {players: [], activePlayerId: "", pickedUpCard: undefined, pile: [],deck: [],state: "Waiting"};
 const waitingRoom: string[] = [];
@@ -66,15 +68,19 @@ io.on("connection", (socket: Socket) => {
           const clicker = game.players.find(p => p.id === clickerId);
           if (clicker) {
             clicker.availableGives.push({ownerId, placement: card.placement});
-            response(TIME_TO_GIVE)
-            setTimeout(() => {
+            response(TOTAL_TIME_TO_GIVE)
+            const updater = (timeLeft:number) => {
+              socket.emit("update-timer-give", ownerId, card.placement, timeLeft)
+            }
+            const handler = () => {
               const index = clicker.availableGives.findIndex(ag => ag.ownerId === ownerId && ag.placement === card.placement);
               if (index !== -1) {
                 clicker.availableGives.splice(index,1);
               }
-
+        
               socket.emit("timeout-give", ownerId, card.placement);
-            },5000)
+            }
+            createTimerWithUpdates(updater, handler, TOTAL_TIME_TO_GIVE, UPDATE_DELAY_TO_GIVE)
           }
         }
       }
@@ -132,6 +138,24 @@ io.on("connection", (socket: Socket) => {
     }
   })
 });
+function createTimerWithUpdates(updater: ((timeLeft: number) => void), handler: (() => void), totalTime:number ,updateDelay: number = 1000) {
+  const helper = (n:number) => {
+    setTimeout(() => {
+      if (n == 0) {
+        handler();
+      }
+      else {
+
+        const timeLeft = updateDelay*n;
+        updater(timeLeft);
+        helper(n -1)
+      }
+    },updateDelay)
+  }
+
+  const numberOfIterations = Math.floor(totalTime/updateDelay)-1;
+  helper(numberOfIterations);
+}
 
 function topCard():Card {
   return game.pile[0];

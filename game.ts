@@ -68,4 +68,4 @@ function gameToDTO(g:Game):GameDTO {
 }
 
 
-export {Value,Suit,Card,GameCard,Player, PlayerDTO,Game, GameDTO, gameToDTO}
+export {Value,Suit,Card,GameCard,Player, PlayerDTO,Game, GameDTO, gameToDTO, InfoGive}
