@@ -1,71 +1,98 @@
-type Suit = "Joker" | "Clubs" | "Diamonds" | "Spades" | "Hearts";
-type Value =
-  2
-  | 3
-  | 4
-  | 5
-  | 6
-  | 7
-  | 8
-  | 9
-  | 10
-  | "Jack"
-  | "Queen"
-  | "King"
-  | "Ace"
-  | "Joker";
+import { Card, getRandomDeck, shuffle } from "./Card";
+import GameDTO from "./GameDTO";
+import Player from "./Player";
+import { v4 as uuidv4 } from 'uuid';
 
-  
-interface Card {
-  suit: Suit
-  value: Value
-}
+export type GameState = "Waiting" | "Playing" | "Finished"
 
-interface GameCard extends Card{
-  placement: number
-}
-
-interface InfoGive {
-  ownerId: string;
-  placement: number;
-}
-
-interface Player {
-  id: string;
-  cards: GameCard[];
-  availableGives: InfoGive[];
-}
-
-interface PlayerDTO {
-  id: string,
-  cards: GameCard[]
-}
-
-
-type GameState = "Waiting" | "Playing" | "Finished"
-
-interface Game {
+export default class Game {
   players: Player[];
   state: GameState;
   activePlayerId: string;
   pile: Card[];
   pickedUpCard: Card |undefined;
   deck: Card[];
+  id: string;
+
+  constructor() {
+    this.players = [];
+    this.activePlayerId= "";
+    this.pickedUpCard= undefined;
+    this.pile= [];
+    this.deck= [];
+    this.state= "Waiting";
+    this.id= uuidv4();
+  }
+
+  get DTO():GameDTO {
+    const {state, players, activePlayerId, pile,deck} = {...structuredClone(this)};
+    
+    return {state, players, activePlayerId, topCard: pile[0], deckSize: deck.length};
+  }
+
+  addPlayer(playerId: string) {
+    this.players.push({id: playerId, availableGives: [], cards: []})
+  }
+
+  removePlayer(playerId: string) {
+    this.players = this.players.filter(p => p.id !== playerId)
+  }
+
+  startGame(numOfCards: number) {
+    this.deck = getRandomDeck();
+    this.players.forEach(p => p.availableGives=[]);
+    this.dealCards(numOfCards);
+    this.activePlayerId = this.players[0].id;
+    this.pickedUpCard = undefined;
+    this.state="Playing"
+    this.pile=[];
+    console.log(this)
+  }
+
+  dealCards(numOfCards: number) {
+    this.players.forEach(p => {
+      p.cards = this.takeCardsFromTopOfDeck(numOfCards).map((c:Card,i:number) => ({...c,placement: i}));
+    })
+  }
+
+  topCard():Card {
+    return this.pile[0];
+  }
+  endTurn() {
+    const currentIndex:number = this.players.findIndex((p) => p.id === this.activePlayerId);
+    const nextPlayer = this.players[(currentIndex + 1) % this.players.length].id;
+
+    this.activePlayerId = nextPlayer;
+    this.pickedUpCard = undefined;
+  }
+  takeCardsFromTopOfDeck(n:number):Card[] {
+    const cards:Card[] = [];
+
+    for (let i = 0; i < n; i++) {
+      cards.push(this.takeCardFromTopOfDeck())
+    }
+
+    return cards;
+  } 
+
+  takeCardFromTopOfDeck():Card {
+    const card = this.deck.pop();
+    if (card === undefined) {
+      throw new Error("Cant take card from empty deck.");
+    }
+    if (this.deck.length == 0) {
+      this.deck = shuffle(this.pile.splice(1));
+    }
+    return card;
+  }
+  
+
+  takeCardFromTopOfPile():Card {
+    const card = this.pile.shift();
+    if (card === undefined) {
+      throw new Error("Cant take card from empty pile.");
+    }
+    return card;
+  }
 }
 
-interface GameDTO {
-  state: GameState;
-  activePlayerId: string;
-  topCard: Card | undefined;
-  players: PlayerDTO[];
-  deckSize: number;
-}
-
-function gameToDTO(g:Game):GameDTO {
-  const {state, players, activePlayerId, pile,deck} = {...g};
-
-  return {state, players, activePlayerId, topCard: pile[0], deckSize: deck.length}
-}
-
-
-export {Value,Suit,Card,GameCard,Player, PlayerDTO,Game, GameDTO, gameToDTO, InfoGive}
