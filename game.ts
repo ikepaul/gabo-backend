@@ -35,7 +35,14 @@ export default class Game {
   }
 
   removePlayer(playerId: string) {
-    this.players = this.players.filter(p => p.id !== playerId)
+    const playerIndex= this.players.findIndex(p => p.id === playerId);
+    if (playerIndex !== -1) {
+      if(this.activePlayerId == playerId) {
+        this.activePlayerId = this.players[(playerIndex + 1) % this.players.length].id;
+      }
+      this.deck.push(...this.players[playerIndex].cards)
+      this.players.splice(playerIndex,1);
+    }
   }
 
   startGame(numOfCards: number) {
@@ -46,7 +53,6 @@ export default class Game {
     this.pickedUpCard = undefined;
     this.state="Playing"
     this.pile=[];
-    console.log(this)
   }
 
   dealCards(numOfCards: number) {

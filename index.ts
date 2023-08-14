@@ -72,7 +72,6 @@ io.on("connection", (socket: Socket) => {
       response("Error: game " + gameId + " does not exist!")
       return;
     }
-    game.removePlayer(socket.id);
     socket.leave(game.id);
     response("Successfully left game: " + game.id);
   })
@@ -237,21 +236,26 @@ function createTimerWithUpdates(updater: ((timeLeft: number) => void), handler: 
   helper(numberOfIterations);
 }
 
-
-
 function endTurn(game: Game) {
   game.endTurn();
 
   io.to(game.id).emit("end-turn", game.activePlayerId)
 }
 
-
 function startGame(game:Game) {
   game.startGame(numOfCards);
-  console.log(game)
-  console.log(game.players)
   io.in(game.id).emit("game-setup", game.DTO)
 }
+
+io.of("/").adapter.on("leave-room", (room,id) => {
+  console.log(room,id)
+  const game = gameHandler[room];
+  if (game !== undefined) {
+    game.removePlayer(id);
+    console.log(game.players);
+    io.to(game.id).emit("player-left", game.players, game.activePlayerId);
+  }
+})
 
 httpServer.listen(3000);
 
@@ -270,12 +274,4 @@ io.of("/").adapter.on("join-room", (room,id) => {
 
 
 
-io.of("/").adapter.on("leave-room", (room,id) => {
-  switch (room) {
-    case "Lobby":
-      console.log(id + " left lobby");
-      game.players.splice(game.players.findIndex((a) => a.id === id),1)
-      addFromWaitingRoom();
-      break;
-  }
-}) */
+ */
