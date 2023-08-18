@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 export type GameState = "Waiting" | "Playing" | "Finished"
 
+const numOfCards = 4;
 export default class Game {
   players: Player[];
   state: GameState;
@@ -13,6 +14,7 @@ export default class Game {
   pickedUpCard: Card |undefined;
   deck: Card[];
   id: string;
+  numOfCards: number;
 
   constructor() {
     this.players = [];
@@ -22,12 +24,13 @@ export default class Game {
     this.deck= [];
     this.state= "Waiting";
     this.id= uuidv4();
+    this.numOfCards = numOfCards;
   }
 
   get DTO():GameDTO {
-    const {state, players, activePlayerId, pile,deck} = {...structuredClone(this)};
+    const {state, players, activePlayerId, pile,deck, numOfCards} = {...structuredClone(this)};
     
-    return {state, players, activePlayerId, topCard: pile[0], deckSize: deck.length};
+    return {state, players, activePlayerId, topCard: pile[0], deckSize: deck.length, numOfCards};
   }
 
   addPlayer(playerId: string) {

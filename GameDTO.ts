@@ -8,4 +8,5 @@ export default interface GameDTO {
   topCard: Card | undefined;
   players: PlayerDTO[];
   deckSize: number;
+  numOfCards: number;
 };

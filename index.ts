@@ -93,7 +93,7 @@ io.on("connection", (socket: Socket) => {
     }
   }
 
-  const handleCardFlip = (gameId:string,card:GameCard,ownerId:string, clickerId: string, response: ((giveTime:number ) => void)) => { 
+  const handleCardFlip = (gameId:string,card:GameCard,ownerId:string, response: ((timeOrPunishment:number|GameCard ) => void)) => { 
     const game:Game = gameHandler[gameId];
     if (game === undefined) {
       console.log("Game doesnt exist!")
@@ -101,23 +101,36 @@ io.on("connection", (socket: Socket) => {
     }
     if (game.topCard().value == card.value) {
       const owner = game.players.find(p => p.id === ownerId);
-      const cardIndex = owner?.cards.findIndex(c => c.placement === card.placement);
-      if (cardIndex !== undefined) {
-        owner?.cards.splice(cardIndex, 1);
-        game.pile.unshift({suit: card.suit, value: card.value});
-        io.to(game.id).emit("card-flip",game.topCard(), ownerId, card.placement);
-        if (ownerId !== clickerId) {
-          const clicker = game.players.find(p => p.id === clickerId);
-          if (clicker) {
-            clicker.availableGives.push({ownerId, placement: card.placement});
-            response(TOTAL_TIME_TO_GIVE)
-            createCardTimer(socket,ownerId, card.placement,clicker);
-          }
+      if (owner == undefined) {return;}
+
+      const cardIndex = owner.cards.findIndex(c => c.placement === card.placement);
+      if (cardIndex === -1) {return;}
+
+      owner.cards.splice(cardIndex, 1);
+      game.pile.unshift({suit: card.suit, value: card.value}); //Add card to pile
+      io.to(game.id).emit("card-flip",game.topCard(), ownerId, card.placement);
+      
+      if (ownerId !== socket.id) {
+        const clicker = game.players.find(p => p.id === socket.id);
+        if (clicker) {
+          clicker.availableGives.push({ownerId, placement: card.placement});
+          response(TOTAL_TIME_TO_GIVE)
+          createCardTimer(socket,ownerId, card.placement,clicker);
         }
       }
     }
     else {
-      //Punishment card
+      const pickedUpCard = game.takeCardFromTopOfDeck();
+      const player = game.players.find(p => p.id === socket.id);
+      
+      // Find first empty place for punishment card
+      let placement = game.numOfCards; //Begins at number of cards so we know its a punishment simply because its placement is more than the number of cards in the game.
+      while (player?.cards.some(pc => pc.placement == placement)) {
+        placement++;
+      }
+      const punishmentCard = {...pickedUpCard, placement};
+      player?.cards.push(punishmentCard);
+      response(punishmentCard);
     }
   }
 
