@@ -99,7 +99,8 @@ io.on("connection", (socket: Socket) => {
       console.log("Game doesnt exist!")
       return;
     }
-    if (game.topCard().value == card.value) {
+    const topCard = game.topCard();
+    if (topCard !== undefined && topCard.value == card.value) {
       const owner = game.players.find(p => p.id === ownerId);
       if (owner == undefined) {return;}
 
