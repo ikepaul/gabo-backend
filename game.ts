@@ -5,7 +5,9 @@ import { v4 as uuidv4 } from 'uuid';
 
 export type GameState = "Waiting" | "Playing" | "Finished"
 
-const numOfCards = 4;
+const maxPlayers = 2;
+const maxNumOfCards = 8;
+const minNumOfCards = 1;
 export default class Game {
   players: Player[];
   state: GameState;
@@ -15,8 +17,11 @@ export default class Game {
   deck: Card[];
   id: string;
   numOfCards: number;
+  maxPlayers: number;
 
-  constructor() {
+  constructor(numOfCards:number) {
+    if (numOfCards > maxNumOfCards) {numOfCards = maxNumOfCards}
+    if (numOfCards < minNumOfCards) {numOfCards = minNumOfCards}
     this.players = [];
     this.activePlayerId= "";
     this.pickedUpCard= undefined;
@@ -25,6 +30,7 @@ export default class Game {
     this.state= "Waiting";
     this.id= uuidv4();
     this.numOfCards = numOfCards;
+    this.maxPlayers = maxPlayers;
   }
 
   get DTO():GameDTO {
@@ -48,10 +54,10 @@ export default class Game {
     }
   }
 
-  startGame(numOfCards: number) {
+  startGame() {
     this.deck = getRandomDeck();
     this.players.forEach(p => p.availableGives=[]);
-    this.dealCards(numOfCards);
+    this.dealCards(this.numOfCards);
     this.activePlayerId = this.players[0].id;
     this.pickedUpCard = undefined;
     this.state="Playing"

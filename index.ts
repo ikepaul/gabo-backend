@@ -6,14 +6,12 @@ import { Card, GameCard } from "./Card";
 import Player from "./Player";
 
 
-const maxPlayers = 2;
-const numOfCards = 4;
 
 const TOTAL_TIME_TO_GIVE = 5000;
 const UPDATE_DELAY_TO_GIVE = 200;
 
 
-const gameHandler: GameHandler = {"dawg": (new Game())}
+const gameHandler: GameHandler = {}
 const waitingRoom: string[] = [];
 
 const httpServer = createServer();
@@ -34,8 +32,8 @@ function restartGame(gameId: string) {
 
 io.on("connection", (socket: Socket) => {
   console.log(socket.id + " connected")
-  const handleCreateGame = (response: ((gameId:string) => void)) => {
-    const game = new Game();
+  const handleCreateGame = (numOfCards: number,response: ((gameId:string) => void)) => {
+    const game = new Game(numOfCards);
     gameHandler[game.id] = game;
     game.addPlayer(socket.id);
     socket.join(game.id);
@@ -48,7 +46,7 @@ io.on("connection", (socket: Socket) => {
       response("404")
       return;
     }
-    if (game.players.length >= maxPlayers) {
+    if (game.players.length >= game.maxPlayers) {
       console.log("Game is full")
       response("Full")
       return;
@@ -56,7 +54,7 @@ io.on("connection", (socket: Socket) => {
     game.addPlayer(socket.id);
     socket.join(game.id);
     response(game.players.filter(p => p.id !== socket.id));
-    if (game.players.length == maxPlayers) {
+    if (game.players.length == game.maxPlayers) {
       startGame(game);
     }
   }
@@ -262,7 +260,7 @@ function endTurn(game: Game) {
 }
 
 function startGame(game:Game) {
-  game.startGame(numOfCards);
+  game.startGame();
   io.in(game.id).emit("game-setup", game.DTO)
 }
 
