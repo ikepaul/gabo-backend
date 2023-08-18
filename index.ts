@@ -2,7 +2,7 @@ import { createServer } from "http";
 import { Server, Socket } from "socket.io";
 import Game from "./Game";
 import GameHandler from "./GameHandler";
-import { GameCard } from "./Card";
+import { Card, GameCard } from "./Card";
 import Player from "./Player";
 
 
@@ -21,30 +21,27 @@ const io = new Server(httpServer, {
   cors: {"origin": "*"}
 });
 
+function restartGame(gameId: string) {
+  const game:Game = gameHandler[gameId];
+  if (game === undefined) {
+    console.log("Game doesnt exist!")
+    return;
+  }
+  startGame(game);
+}
 
 
 
 io.on("connection", (socket: Socket) => {
   console.log(socket.id + " connected")
-  
-  socket.on("RestartGame", (gameId) => {
-    const game:Game = gameHandler[gameId];
-    if (game === undefined) {
-      console.log("Game doesnt exist!")
-      return;
-    }
-    startGame(game);
-  })
-
-  socket.on("create-game", (response) => {
+  const handleCreateGame = (response: ((gameId:string) => void)) => {
     const game = new Game();
     gameHandler[game.id] = game;
     game.addPlayer(socket.id);
     socket.join(game.id);
     response(game.id);
-  })
-
-  socket.on("join-game", (gameId, response) => {
+  }
+  const handleJoinGame = (gameId:string, response:((playersOrError:Player[] |string) => void)) => {
     const game:Game = gameHandler[gameId];
     if (game === undefined) {
       console.log("Game doesnt exist!")
@@ -52,7 +49,6 @@ io.on("connection", (socket: Socket) => {
       return;
     }
     if (game.players.length >= maxPlayers) {
-      
       console.log("Game is full")
       response("Full")
       return;
@@ -63,52 +59,41 @@ io.on("connection", (socket: Socket) => {
     if (game.players.length == maxPlayers) {
       startGame(game);
     }
-  })
+  }
 
-  socket.on("leave-game", (gameId, response) => {
+  const handleLeaveGame = (gameId:string, response:((successOrError:string) => void)) => {
     const game:Game = gameHandler[gameId];
     if (game === undefined) {
       console.log("Game doesnt exist!")
-      response("Error: game " + gameId + " does not exist!")
+      response("404")
       return;
     }
     socket.leave(game.id);
-    response("Successfully left game: " + game.id);
-  })
+    response("Success");
+  }
 
-  // let numInLobby: number | undefined =io.sockets.adapter.rooms.get("Lobby")?.size 
-  // if (numInLobby === undefined || numInLobby < maxPlayers) {
-  //   socket.join("Lobby");
-  // }
-  // else {
-  //   console.log(socket.id + " added to waiting room");
-  //   waitingRoom.push(socket.id);
-  // }
-
-  socket.on("give-card", (gameId:string,placement: number) => {
+  const handleGiveCard = (gameId:string,placement: number) => {
     const game:Game = gameHandler[gameId];
     if (game === undefined) {
       console.log("Game doesnt exist!")
       return;
     }
     const player = game.players.find(p => p.id === socket.id);
-    if (player !== undefined) {
-      if (player.availableGives.length > 0) {
-        const ag = player.availableGives.shift();
-        const opponent = game.players.find(p => p.id === ag?.ownerId);
-        if (ag !== undefined && opponent!==undefined) {
-          const index = player.cards.findIndex(c => c.placement === placement)
-          const [card] = player.cards.splice(index, 1);
-          
-          opponent.cards.push({...card, placement: ag.placement})
-          io.to(game.id).emit("give-card", {placement, ownerId: socket.id}, ag)
-          socket.emit("timeout-give", ag.ownerId, card.placement);
-        }
+    if (player !== undefined && player.availableGives.length > 0) {
+      const availableGives = player.availableGives.shift();
+      const opponent = game.players.find(p => p.id === availableGives?.ownerId);
+      if (availableGives !== undefined && opponent!==undefined) {
+        const index = player.cards.findIndex(c => c.placement === placement)
+        const [card] = player.cards.splice(index, 1);
+        
+        opponent.cards.push({...card, placement: availableGives.placement})
+        io.to(game.id).emit("give-card", {placement, ownerId: socket.id}, availableGives)
+        socket.emit("timeout-give", availableGives.ownerId, card.placement);
       }
     }
-  })
+  }
 
-  socket.on("card-flip", (gameId:string,card:GameCard,ownerId:string, clickerId: string, response) => { 
+  const handleCardFlip = (gameId:string,card:GameCard,ownerId:string, clickerId: string, response: ((giveTime:number ) => void)) => { 
     const game:Game = gameHandler[gameId];
     if (game === undefined) {
       console.log("Game doesnt exist!")
@@ -134,9 +119,9 @@ io.on("connection", (socket: Socket) => {
     else {
       //Punishment card
     }
-  })
+  }
 
-  socket.on("draw-from-deck", (gameId:string,response) => {
+  const handleDrawFromDeck = (gameId:string,response: ((card: Card) => void)) => {
     const game:Game = gameHandler[gameId];
     if (game === undefined) {
       console.log("Game doesnt exist!")
@@ -150,9 +135,9 @@ io.on("connection", (socket: Socket) => {
       io.to(game.id).emit("draw-from-deck", (game.deck.length))
       response(card);
     }
-  })
+  }
 
-  socket.on("draw-from-pile", (gameId:string,response) => {
+  const handleDrawFromPile = (gameId:string,response: ((card: Card, topCard: Card) => void) ) => {
     const game:Game = gameHandler[gameId];
     if (game === undefined) {
       console.log("Game doesnt exist!")
@@ -163,9 +148,9 @@ io.on("connection", (socket: Socket) => {
       response(card, game.pile[0]);
       game.pickedUpCard=card;
     }
-  })
+  }
 
-  socket.on("put-on-pile", (gameId:string,ack) => {
+  const handlePutOnPile = (gameId:string,ack:(() => void)) => {
     const game:Game = gameHandler[gameId];
     if (game === undefined) {
       console.log("Game doesnt exist!")
@@ -177,9 +162,9 @@ io.on("connection", (socket: Socket) => {
       io.to(game.id).emit("update-topcard", game.pile[0])
       endTurn(game);
     }
-  })
-
-  socket.on("hand-card-swap", (gameId:string,placement: number) => {
+  }
+  
+  const handleHandCardSwap = (gameId:string,placement: number) => {
     const game:Game = gameHandler[gameId];
     if (game === undefined) {
       console.log("Game doesnt exist!")
@@ -199,7 +184,27 @@ io.on("connection", (socket: Socket) => {
         endTurn(game);
       }
     }
-  })
+  }
+
+  socket.on("RestartGame", restartGame);
+  
+  socket.on("create-game", handleCreateGame);
+  
+  socket.on("join-game", handleJoinGame);
+
+  socket.on("leave-game", handleLeaveGame);
+
+  socket.on("give-card", handleGiveCard);
+
+  socket.on("card-flip", handleCardFlip);
+
+  socket.on("draw-from-deck", handleDrawFromDeck);
+
+  socket.on("draw-from-pile", handleDrawFromPile);
+
+  socket.on("put-on-pile", handlePutOnPile);
+
+  socket.on("hand-card-swap", handleHandCardSwap);
 });
 
 function createCardTimer(socket:Socket,ownerId:string,placement:number,clicker:Player ) {
