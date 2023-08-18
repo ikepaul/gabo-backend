@@ -93,7 +93,7 @@ io.on("connection", (socket: Socket) => {
     }
   }
 
-  const handleCardFlip = (gameId:string,card:GameCard,ownerId:string, response: ((timeOrPunishment:number|GameCard ) => void)) => { 
+  const handleCardFlip = (gameId:string,card:GameCard,ownerId:string, response: ((maxTime:number ) => void)) => { 
     const game:Game = gameHandler[gameId];
     if (game === undefined) {
       console.log("Game doesnt exist!")
@@ -131,7 +131,7 @@ io.on("connection", (socket: Socket) => {
       }
       const punishmentCard = {...pickedUpCard, placement};
       player?.cards.push(punishmentCard);
-      response(punishmentCard);
+      io.to(game.id).emit('punishment-card',socket.id, punishmentCard);
     }
   }
 
