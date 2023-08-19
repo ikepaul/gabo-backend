@@ -4,10 +4,10 @@ import Player from "./Player";
 import { v4 as uuidv4 } from 'uuid';
 
 export type GameState = "Waiting" | "Playing" | "Finished"
-
-const maxPlayers = 2;
 const maxNumOfCards = 8;
 const minNumOfCards = 1;
+const maxPlayerLimit = 4;
+const minPlayerLimit = 1;
 export default class Game {
   players: Player[];
   state: GameState;
@@ -17,11 +17,13 @@ export default class Game {
   deck: Card[];
   id: string;
   numOfCards: number;
-  maxPlayers: number;
+  playerLimit: number;
 
-  constructor(numOfCards:number) {
+  constructor(numOfCards:number, playerLimit: number) {
     if (numOfCards > maxNumOfCards) {numOfCards = maxNumOfCards}
     if (numOfCards < minNumOfCards) {numOfCards = minNumOfCards}
+    if (playerLimit > maxPlayerLimit) {playerLimit = maxPlayerLimit}
+    if (playerLimit < minPlayerLimit) {playerLimit = minPlayerLimit}
     this.players = [];
     this.activePlayerId= "";
     this.pickedUpCard= undefined;
@@ -30,7 +32,7 @@ export default class Game {
     this.state= "Waiting";
     this.id= uuidv4();
     this.numOfCards = numOfCards;
-    this.maxPlayers = maxPlayers;
+    this.playerLimit = playerLimit;
   }
 
   get DTO():GameDTO {
@@ -40,7 +42,9 @@ export default class Game {
   }
 
   addPlayer(playerId: string) {
-    this.players.push({id: playerId, availableGives: [], cards: []})
+    const player = {id: playerId, availableGives: [], cards: []};
+    this.players.push(player);
+    return player;
   }
 
   removePlayer(playerId: string) {
@@ -60,7 +64,7 @@ export default class Game {
     this.dealCards(this.numOfCards);
     this.activePlayerId = this.players[0].id;
     this.pickedUpCard = undefined;
-    this.state="Playing"
+    this.state="Playing";
     this.pile=[];
   }
 

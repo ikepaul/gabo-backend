@@ -4,6 +4,8 @@ import Game from "./Game";
 import GameHandler from "./GameHandler";
 import { Card, GameCard } from "./Card";
 import Player from "./Player";
+import { toPlayerDTO } from "./PlayerDTO";
+import GameDTO from "./GameDTO";
 
 
 
@@ -32,8 +34,8 @@ function restartGame(gameId: string) {
 
 io.on("connection", (socket: Socket) => {
   console.log(socket.id + " connected")
-  const handleCreateGame = (numOfCards: number,response: ((gameId:string) => void)) => {
-    const game = new Game(numOfCards);
+  const handleCreateGame = (numOfCards: number, playerLimit: number, response: ((gameId:string) => void)) => {
+    const game = new Game(numOfCards,playerLimit);
     gameHandler[game.id] = game;
     game.addPlayer(socket.id);
     socket.join(game.id);
@@ -46,17 +48,15 @@ io.on("connection", (socket: Socket) => {
       response("404")
       return;
     }
-    if (game.players.length >= game.maxPlayers) {
+    if (game.players.length >= game.playerLimit) {
       console.log("Game is full")
       response("Full")
       return;
     }
-    game.addPlayer(socket.id);
+    const player = game.addPlayer(socket.id);
     socket.join(game.id);
     response(game.players.filter(p => p.id !== socket.id));
-    if (game.players.length == game.maxPlayers) {
-      startGame(game);
-    }
+    io.to(game.id).emit("player-joined", toPlayerDTO(player))
   }
 
   const handleLeaveGame = (gameId:string, response:((successOrError:string) => void)) => {
@@ -198,6 +198,10 @@ io.on("connection", (socket: Socket) => {
     }
   }
 
+  const handleGetGame = (gameId:string,response : ((game:GameDTO) =>void)) => {
+    response(gameHandler[gameId].DTO);
+  }
+
   socket.on("RestartGame", restartGame);
   
   socket.on("create-game", handleCreateGame);
@@ -217,6 +221,8 @@ io.on("connection", (socket: Socket) => {
   socket.on("put-on-pile", handlePutOnPile);
 
   socket.on("hand-card-swap", handleHandCardSwap);
+
+  socket.on("get-game", handleGetGame);
 });
 
 function createCardTimer(socket:Socket,ownerId:string,placement:number,clicker:Player ) {
@@ -283,7 +289,7 @@ io.of("/").adapter.on("join-room", (room,id) => {
       console.log(id + " joined lobby");
       game.players.push({id, cards:[], availableGives: []})
       let numInLobby: number | undefined =io.sockets.adapter.rooms.get("Lobby")?.size 
-      if (numInLobby == maxPlayers) {
+      if (numInLobby == playerLimit) {
         startGame();
       }
   }
