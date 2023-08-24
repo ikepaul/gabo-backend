@@ -4,6 +4,7 @@ import Player from "./Player";
 import { v4 as uuidv4 } from 'uuid';
 
 export type GameState = "Waiting" | "Playing" | "Finished"
+export type Ability = "look-self" | "look-other" | "swap-then-look" | "look-then-swap";
 const maxNumOfCards = 8;
 const minNumOfCards = 1;
 const maxPlayerLimit = 4;
@@ -13,6 +14,7 @@ export default class Game {
   spectators: string[]; //List of ids
   state: GameState;
   activePlayerId: string;
+  activeAbility: Ability | "";
   pile: Card[];
   pickedUpCard: Card |undefined;
   deck: Card[];
@@ -29,6 +31,7 @@ export default class Game {
     this.spectators = [];
     this.activePlayerId= "";
     this.pickedUpCard= undefined;
+    this.activeAbility = "";
     this.pile= [];
     this.deck= [];
     this.state= "Waiting";

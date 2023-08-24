@@ -166,7 +166,29 @@ io.on("connection", (socket: Socket) => {
       ack();
       game.pile.unshift(game.pickedUpCard)
       io.to(game.id).emit("update-topcard", game.pile[0])
-      endTurn(game);
+      useCardAbility(game);
+      game.pickedUpCard = undefined;
+    }
+  }
+
+  const useCardAbility = (game:Game):void => {
+    switch(game.pickedUpCard?.value) {
+      case 7:
+      case 8:
+        game.activeAbility = "look-self";
+        socket.emit("use-ability", "look-self");
+        break;
+      case 9:
+      case 10:
+        game.activeAbility = "look-other";
+        socket.emit("use-ability", "look-other");
+        break;
+      case "Jack":
+      case "Queen":
+      case "King":
+      default:
+        endTurn(game);
+        return;
     }
   }
   
@@ -196,6 +218,38 @@ io.on("connection", (socket: Socket) => {
     response(gameHandler[gameId].DTO);
   }
 
+  const handleLookSelf = (gameId:string,placement:number, response: ((card:GameCard) => void)) => {
+    const game = gameHandler[gameId];
+    if (game === undefined) {
+      console.log("Game doesnt exist!")
+      return;
+    }
+
+    if(game.activePlayerId === socket.id && game.activeAbility === "look-self") {
+      const card = game.players.find(p => p.id === socket.id)?.cards.find(c => c.placement === placement);
+      if (card === undefined) {return "Card doesnt exist";}
+      response(card)
+      endTurn(game);
+    }
+  }
+
+  const handleLookOther = (gameId:string,ownerId:string, placement:number, response: ((card:GameCard) => void)) => {
+    if (ownerId === socket.id) {return;}
+    
+    const game = gameHandler[gameId];
+    if (game === undefined) {
+      console.log("Game doesnt exist!")
+      return;
+    }
+
+    if(game.activePlayerId === socket.id && game.activeAbility === "look-other") {
+      const card = game.players.find(p => p.id === ownerId)?.cards.find(c => c.placement === placement);
+      if (card === undefined) {return;}
+      response(card)
+      endTurn(game);
+    }
+  }
+
   socket.on("RestartGame", restartGame);
   
   socket.on("create-game", handleCreateGame);
@@ -217,6 +271,10 @@ io.on("connection", (socket: Socket) => {
   socket.on("hand-card-swap", handleHandCardSwap);
 
   socket.on("get-game", handleGetGame);
+
+  socket.on("look-self", handleLookSelf);
+
+  socket.on("look-other", handleLookOther);
 });
 
 function createCardTimer(socket:Socket,ownerId:string,placement:number,clicker:Player ) {
