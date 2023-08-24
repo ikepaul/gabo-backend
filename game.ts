@@ -1,10 +1,14 @@
 import { Card, getRandomDeck, shuffle } from "./Card";
 import GameDTO from "./GameDTO";
 import Player from "./Player";
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
 
-export type GameState = "Waiting" | "Playing" | "Finished"
-export type Ability = "look-self" | "look-other" | "swap-then-look" | "look-then-swap";
+export type GameState = "Waiting" | "Playing" | "Finished";
+export type Ability =
+  | "look-self"
+  | "look-other"
+  | "swap-then-look"
+  | "look-then-swap";
 const maxNumOfCards = 8;
 const minNumOfCards = 1;
 const maxPlayerLimit = 4;
@@ -16,100 +20,141 @@ export default class Game {
   activePlayerId: string;
   activeAbility: Ability | "";
   pile: Card[];
-  pickedUpCard: Card |undefined;
+  pickedUpCard: Card | undefined;
   deck: Card[];
   id: string;
   numOfCards: number;
   playerLimit: number;
 
-  constructor(numOfCards:number, playerLimit: number) {
-    if (numOfCards > maxNumOfCards) {numOfCards = maxNumOfCards}
-    if (numOfCards < minNumOfCards) {numOfCards = minNumOfCards}
-    if (playerLimit > maxPlayerLimit) {playerLimit = maxPlayerLimit}
-    if (playerLimit < minPlayerLimit) {playerLimit = minPlayerLimit}
+  constructor(numOfCards: number, playerLimit: number) {
+    if (numOfCards > maxNumOfCards) {
+      numOfCards = maxNumOfCards;
+    }
+    if (numOfCards < minNumOfCards) {
+      numOfCards = minNumOfCards;
+    }
+    if (playerLimit > maxPlayerLimit) {
+      playerLimit = maxPlayerLimit;
+    }
+    if (playerLimit < minPlayerLimit) {
+      playerLimit = minPlayerLimit;
+    }
     this.players = [];
     this.spectators = [];
-    this.activePlayerId= "";
-    this.pickedUpCard= undefined;
+    this.activePlayerId = "";
+    this.pickedUpCard = undefined;
     this.activeAbility = "";
-    this.pile= [];
-    this.deck= [];
-    this.state= "Waiting";
-    this.id= uuidv4();
+    this.pile = [];
+    this.deck = [];
+    this.state = "Waiting";
+    this.id = uuidv4();
     this.numOfCards = numOfCards;
     this.playerLimit = playerLimit;
   }
 
-  get DTO():GameDTO {
-    const {state, players, activePlayerId, pile,deck, numOfCards, spectators} = {...structuredClone(this)};
-    
-    return {state, players, activePlayerId, topCard: pile[0], deckSize: deck.length, numOfCards, spectators};
+  get DTO(): GameDTO {
+    const {
+      state,
+      players,
+      activePlayerId,
+      pile,
+      deck,
+      numOfCards,
+      spectators,
+    } = { ...structuredClone(this) };
+
+    return {
+      state,
+      players,
+      activePlayerId,
+      topCard: pile[0],
+      deckSize: deck.length,
+      numOfCards,
+      spectators,
+    };
   }
 
   addPlayer(userId: string) {
-    const player = {id: userId, availableGives: [], cards: []};
+    const player = { id: userId, availableGives: [], cards: [] };
     this.players.push(player);
     return player;
+  }
+
+  removePlayer(playerId: string) {
+    const playerIndex = this.players.findIndex((p) => p.id === playerId);
+    if (playerIndex !== -1) {
+      if (this.activePlayerId == playerId) {
+        this.activePlayerId =
+          this.players[(playerIndex + 1) % this.players.length].id;
+      }
+      this.deck.push(...this.players[playerIndex].cards);
+      this.players.splice(playerIndex, 1);
+    }
   }
 
   addSpectator(userId: string) {
     this.spectators.push(userId);
   }
 
-  removePlayer(playerId: string) {
-    const playerIndex= this.players.findIndex(p => p.id === playerId);
-    if (playerIndex !== -1) {
-      if(this.activePlayerId == playerId) {
-        this.activePlayerId = this.players[(playerIndex + 1) % this.players.length].id;
-      }
-      this.deck.push(...this.players[playerIndex].cards)
-      this.players.splice(playerIndex,1);
+  removeSpectator(userId: string) {
+    const index = this.spectators.findIndex((s) => s === userId);
+    if (index !== -1) {
+      this.spectators.splice(index, 1);
     }
   }
 
   startGame() {
     this.deck = getRandomDeck();
-    while(this.players.length < this.playerLimit && this.spectators.length > 0) {
+    while (
+      this.players.length < this.playerLimit &&
+      this.spectators.length > 0
+    ) {
       const newPlayer = this.spectators.shift();
       if (newPlayer) {
         this.addPlayer(newPlayer);
       }
     }
-    this.players.forEach(p => p.availableGives=[]);
+    this.players.forEach((p) => (p.availableGives = []));
     this.dealCards(this.numOfCards);
     this.activePlayerId = this.players[0].id;
     this.pickedUpCard = undefined;
-    this.state="Playing";
-    this.pile=[];
+    this.state = "Playing";
+    this.pile = [];
   }
 
   dealCards(numOfCards: number) {
-    this.players.forEach(p => {
-      p.cards = this.takeCardsFromTopOfDeck(numOfCards).map((c:Card,i:number) => ({...c,placement: i}));
-    })
+    this.players.forEach((p) => {
+      p.cards = this.takeCardsFromTopOfDeck(numOfCards).map(
+        (c: Card, i: number) => ({ ...c, placement: i })
+      );
+    });
   }
 
-  topCard():Card {
+  topCard(): Card {
     return this.pile[0];
   }
   endTurn() {
-    const currentIndex:number = this.players.findIndex((p) => p.id === this.activePlayerId);
-    const nextPlayer = this.players[(currentIndex + 1) % this.players.length].id;
+    const currentIndex: number = this.players.findIndex(
+      (p) => p.id === this.activePlayerId
+    );
+    const nextPlayer =
+      this.players[(currentIndex + 1) % this.players.length].id;
 
     this.activePlayerId = nextPlayer;
+    this.activeAbility = "";
     this.pickedUpCard = undefined;
   }
-  takeCardsFromTopOfDeck(n:number):Card[] {
-    const cards:Card[] = [];
+  takeCardsFromTopOfDeck(n: number): Card[] {
+    const cards: Card[] = [];
 
     for (let i = 0; i < n; i++) {
-      cards.push(this.takeCardFromTopOfDeck())
+      cards.push(this.takeCardFromTopOfDeck());
     }
 
     return cards;
-  } 
+  }
 
-  takeCardFromTopOfDeck():Card {
+  takeCardFromTopOfDeck(): Card {
     const card = this.deck.pop();
     if (card === undefined) {
       throw new Error("Cant take card from empty deck.");
@@ -119,9 +164,8 @@ export default class Game {
     }
     return card;
   }
-  
 
-  takeCardFromTopOfPile():Card {
+  takeCardFromTopOfPile(): Card {
     const card = this.pile.shift();
     if (card === undefined) {
       throw new Error("Cant take card from empty pile.");
@@ -129,4 +173,3 @@ export default class Game {
     return card;
   }
 }
-
