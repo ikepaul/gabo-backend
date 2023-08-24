@@ -8,10 +8,8 @@ import { toPlayerDTO } from "./PlayerDTO";
 import GameDTO from "./GameDTO";
 
 
-
 const TOTAL_TIME_TO_GIVE = 5000;
 const UPDATE_DELAY_TO_GIVE = 200;
-
 
 const gameHandler: GameHandler = {}
 const waitingRoom: string[] = [];
@@ -37,26 +35,22 @@ io.on("connection", (socket: Socket) => {
   const handleCreateGame = (numOfCards: number, playerLimit: number, response: ((gameId:string) => void)) => {
     const game = new Game(numOfCards,playerLimit);
     gameHandler[game.id] = game;
-    game.addPlayer(socket.id);
+    game.addSpectator(socket.id);
     socket.join(game.id);
     response(game.id);
   }
-  const handleJoinGame = (gameId:string, response:((playersOrError:Player[] |string) => void)) => {
+  const handleJoinGame = (gameId:string, response:((status:"ok" | "404") => void)) => {
     const game:Game = gameHandler[gameId];
     if (game === undefined) {
       console.log("Game doesnt exist!")
       response("404")
       return;
     }
-    if (game.players.length >= game.playerLimit) {
-      console.log("Game is full")
-      response("Full")
-      return;
-    }
-    const player = game.addPlayer(socket.id);
+    
+    game.addSpectator(socket.id);
+    response("ok");
     socket.join(game.id);
-    response(game.players.filter(p => p.id !== socket.id));
-    io.to(game.id).emit("player-joined", toPlayerDTO(player))
+    io.to(game.id).emit("spectator-added", socket.id);
   }
 
   const handleLeaveGame = (gameId:string, response:((successOrError:string) => void)) => {

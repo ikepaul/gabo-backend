@@ -10,6 +10,7 @@ const maxPlayerLimit = 4;
 const minPlayerLimit = 1;
 export default class Game {
   players: Player[];
+  spectators: string[]; //List of ids
   state: GameState;
   activePlayerId: string;
   pile: Card[];
@@ -25,6 +26,7 @@ export default class Game {
     if (playerLimit > maxPlayerLimit) {playerLimit = maxPlayerLimit}
     if (playerLimit < minPlayerLimit) {playerLimit = minPlayerLimit}
     this.players = [];
+    this.spectators = [];
     this.activePlayerId= "";
     this.pickedUpCard= undefined;
     this.pile= [];
@@ -36,15 +38,19 @@ export default class Game {
   }
 
   get DTO():GameDTO {
-    const {state, players, activePlayerId, pile,deck, numOfCards} = {...structuredClone(this)};
+    const {state, players, activePlayerId, pile,deck, numOfCards, spectators} = {...structuredClone(this)};
     
-    return {state, players, activePlayerId, topCard: pile[0], deckSize: deck.length, numOfCards};
+    return {state, players, activePlayerId, topCard: pile[0], deckSize: deck.length, numOfCards, spectators};
   }
 
-  addPlayer(playerId: string) {
-    const player = {id: playerId, availableGives: [], cards: []};
+  addPlayer(userId: string) {
+    const player = {id: userId, availableGives: [], cards: []};
     this.players.push(player);
     return player;
+  }
+
+  addSpectator(userId: string) {
+    this.spectators.push(userId);
   }
 
   removePlayer(playerId: string) {
@@ -60,6 +66,12 @@ export default class Game {
 
   startGame() {
     this.deck = getRandomDeck();
+    while(this.players.length < this.playerLimit && this.spectators.length > 0) {
+      const newPlayer = this.spectators.shift();
+      if (newPlayer) {
+        this.addPlayer(newPlayer);
+      }
+    }
     this.players.forEach(p => p.availableGives=[]);
     this.dealCards(this.numOfCards);
     this.activePlayerId = this.players[0].id;

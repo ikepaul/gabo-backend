@@ -7,6 +7,7 @@ export default interface GameDTO {
   activePlayerId: string;
   topCard: Card | undefined;
   players: PlayerDTO[];
+  spectators: string[]; //List of ids
   deckSize: number;
   numOfCards: number;
 };
