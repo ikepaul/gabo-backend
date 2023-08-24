@@ -23,6 +23,7 @@ interface ServerToClientEvents {
   endTurn: (activePlayerId: string) => void;
   gameSetup: (g: GameDTO) => void;
   playerLeft: (updatedPlayers: PlayerDTO[], activePlayerId: string) => void;
+  spectatorLeft: (updatedPlayers: string[]) => void;
   updateTimerGive: (
     ownerId: string,
     placement: number,
@@ -488,13 +489,19 @@ function startGame(game: Game) {
   io.in(game.id).emit("gameSetup", game.DTO);
 }
 
-io.of("/").adapter.on("leaveRoom", (room, id) => {
+io.of("/").adapter.on("leave-room", (room, id) => {
   console.log(room, id);
   const game = gameHandler[room];
   if (game !== undefined) {
-    game.removePlayer(id);
-    console.log(game.players);
-    io.to(game.id).emit("playerLeft", game.players, game.activePlayerId);
+    if (game.spectators.includes(id)) {
+      game.removeSpectator(id);
+      io.to(game.id).emit("spectatorLeft", game.spectators);
+    }
+
+    if (game.players.some((p) => p.id === id)) {
+      game.removePlayer(id);
+      io.to(game.id).emit("playerLeft", game.players, game.activePlayerId);
+    }
   }
 });
 
