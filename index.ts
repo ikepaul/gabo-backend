@@ -20,6 +20,10 @@ interface ServerToClientEvents {
   drawFromDeck: (deckSize: number) => void;
   updateTopCard: (topCard: Card) => void;
   handCardSwap: (socketId: string, placement: number, c: GameCard) => void;
+  cardSwap: (
+    playerPlacement: { ownerId: string; placement: number },
+    opponentPlacement: { ownerId: string; placement: number }
+  ) => void;
   endTurn: (activePlayerId: string) => void;
   gameSetup: (g: GameDTO) => void;
   playerLeft: (updatedPlayers: PlayerDTO[], activePlayerId: string) => void;
@@ -312,6 +316,9 @@ io.on("connection", (socket: Socket) => {
         break;
       case "Jack":
       case "Queen":
+        game.activeAbility = "swap-then-look";
+        socket.emit("useAbility", "swap-then-look");
+        break;
       case "King":
       default:
         endTurn(game);
@@ -402,6 +409,82 @@ io.on("connection", (socket: Socket) => {
     }
   };
 
+  const handleSwapThenLook = (
+    gameId: string,
+    playerPlacement: { ownerId: string; placement: number },
+    opponentPlacement: { ownerId: string; placement: number },
+    response: (receivedCard: GameCard) => void
+  ) => {
+    const game = gameHandler[gameId];
+    if (game === undefined) {
+      console.log("Game doesnt exist!");
+      return;
+    }
+
+    if (game.activeAbility !== "swap-then-look") {
+      return;
+    }
+    if (game.activePlayerId !== socket.id) {
+      return;
+    }
+    if (playerPlacement.ownerId !== socket.id) {
+      return;
+    }
+
+    const player = game.players.find((p) => p.id === playerPlacement.ownerId);
+    const opponent = game.players.find(
+      (p) => p.id === opponentPlacement.ownerId
+    );
+
+    if (player === undefined || opponent === undefined) {
+      return;
+    }
+
+    const playerCardIndex = player.cards.findIndex(
+      (c) => c.placement === playerPlacement.placement
+    );
+    const opponentCardIndex = opponent.cards.findIndex(
+      (c) => c.placement === opponentPlacement.placement
+    );
+    if (playerCardIndex === -1 || opponentCardIndex === -1) {
+      return;
+    }
+
+    //Remove each card
+    const [playerCard] = player.cards.splice(playerCardIndex, 1);
+    const [opponentCard] = opponent.cards.splice(opponentCardIndex, 1);
+
+    //Swap placement numbers of the cards
+    const temp = opponentCard.placement;
+    opponentCard.placement = playerCard.placement;
+    playerCard.placement = temp;
+
+    //Put them back in the others cards
+    player.cards.push(opponentCard);
+    opponent.cards.push(playerCard);
+
+    response(opponentCard);
+
+    console.log(player.cards);
+    console.log(opponent.cards);
+
+    io.to(gameId).emit(
+      "cardSwap",
+      {
+        ownerId: playerPlacement.ownerId,
+        placement: playerPlacement.placement,
+      },
+      {
+        ownerId: opponentPlacement.ownerId,
+        placement: opponentPlacement.placement,
+      }
+    );
+
+    endTurn(game);
+  };
+
+  const handleLookThenSwap = (myCard: GameCard, their: GameCard) => {};
+
   socket.on("restartGame", restartGame);
 
   socket.on("createGame", handleCreateGame);
@@ -427,6 +510,10 @@ io.on("connection", (socket: Socket) => {
   socket.on("lookSelf", handleLookSelf);
 
   socket.on("lookOther", handleLookOther);
+
+  socket.on("swapThenLook", handleSwapThenLook);
+
+  socket.on("lookThenSwap", handleLookThenSwap);
 });
 
 function createCardTimer(
