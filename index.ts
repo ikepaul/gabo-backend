@@ -16,7 +16,7 @@ interface ServerToClientEvents {
   spectatorAdded: (socketId: string) => void;
   giveCard: (card: InfoGive, availableGives: InfoGive) => void;
   cardFlip: (topCard: Card, ownerId: string, placement: number) => void;
-  punishmentCard: (playerId: string, punishmentCard: GameCardDTO) => void;
+  punishmentCard: (punishmentCard: GameCardDTO) => void;
   drawFromDeck: (deckSize: number) => void;
   updateTopCard: (topCard: Card) => void;
   handCardSwap: (socketId: string, placement: number, c: Card) => void;
@@ -266,10 +266,7 @@ io.on("connection", (socket: Socket) => {
       }
       const punishmentCard = { ...pickedUpCard, placement, ownerId: player.id };
       player?.cards.push(punishmentCard);
-      io.to(game.id).emit("punishmentCard", socket.id, {
-        ownerId: socket.id,
-        placement,
-      });
+      io.to(game.id).emit("punishmentCard", punishmentCard as GameCardDTO);
     }
   };
 
