@@ -111,7 +111,6 @@ function restartGame(gameId: string) {
 }
 
 io.on("connection", (socket: Socket) => {
-  console.log(socket.id + " connected");
   const handleCreateGame = (
     numOfCards: number,
     playerLimit: number,
@@ -186,7 +185,11 @@ io.on("connection", (socket: Socket) => {
           { placement, ownerId: socket.id },
           firstAvailableGive
         );
-        socket.emit("timeoutGive", firstAvailableGive.ownerId, card.placement);
+        socket.emit(
+          "timeoutGive",
+          firstAvailableGive.ownerId,
+          firstAvailableGive.placement
+        );
       }
     }
   };
@@ -206,7 +209,6 @@ io.on("connection", (socket: Socket) => {
       .find((p) => p.id == cardPlacement.ownerId)
       ?.cards.find((c) => c.placement === cardPlacement.placement);
 
-    console.log(card);
     if (!card) {
       return;
     }
@@ -232,8 +234,6 @@ io.on("connection", (socket: Socket) => {
         cardPlacement.ownerId,
         card.placement
       );
-
-      console.log("emitting card flip");
 
       if (cardPlacement.ownerId !== socket.id) {
         const clicker = game.players.find((p) => p.id === socket.id);
@@ -660,9 +660,8 @@ function createCardTimer(
     );
     if (index !== -1) {
       clicker.availableGives.splice(index, 1);
+      socket.emit("timeoutGive", ownerId, placement);
     }
-
-    socket.emit("timeoutGive", ownerId, placement);
   };
   createTimerWithUpdates(
     updater,
