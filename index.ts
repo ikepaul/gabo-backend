@@ -279,6 +279,7 @@ io.on("connection", (socket: Socket) => {
     if (
       game.activePlayerId === socket.id &&
       !game.pickedUpCard &&
+      !game.activeAbility &&
       game.topCard()
     ) {
       const card = game.takeCardFromTopOfPile();
@@ -297,7 +298,11 @@ io.on("connection", (socket: Socket) => {
       ack();
       game.pile.unshift(game.pickedUpCard);
       io.to(game.id).emit("updateTopCard", game.pile[0]);
-      useCardAbility(game);
+      if (!game.pickedFromPile) {
+        useCardAbility(game);
+      } else {
+        endTurn(game);
+      }
       game.pickedUpCard = undefined;
     }
   };

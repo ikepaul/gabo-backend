@@ -21,6 +21,7 @@ export default class Game {
   activeAbility: Ability | "";
   pile: Card[];
   pickedUpCard: Card | undefined;
+  pickedFromPile: boolean;
   deck: Card[];
   id: string;
   numOfCards: number;
@@ -43,6 +44,7 @@ export default class Game {
     this.spectators = [];
     this.activePlayerId = "";
     this.pickedUpCard = undefined;
+    this.pickedFromPile = false;
     this.activeAbility = "";
     this.pile = [];
     this.deck = [];
@@ -143,6 +145,7 @@ export default class Game {
     this.activePlayerId = nextPlayer;
     this.activeAbility = "";
     this.pickedUpCard = undefined;
+    this.pickedFromPile = false;
   }
   takeCardsFromTopOfDeck(n: number): Card[] {
     const cards: Card[] = [];
@@ -170,6 +173,7 @@ export default class Game {
     if (card === undefined) {
       throw new Error("Cant take card from empty pile.");
     }
+    this.pickedFromPile = true;
     return card;
   }
 }
