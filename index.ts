@@ -325,6 +325,9 @@ io.on("connection", (socket: Socket) => {
         socket.emit("useAbility", "swap-then-look");
         break;
       case "King":
+        game.activeAbility = "look-then-swap";
+        socket.emit("useAbility", "look-then-swap");
+        break;
       default:
         endTurn(game);
         return;
@@ -425,53 +428,21 @@ io.on("connection", (socket: Socket) => {
       console.log("Game doesnt exist!");
       return;
     }
-
-    if (game.activeAbility !== "swap-then-look") {
-      return;
-    }
     if (game.activePlayerId !== socket.id) {
       return;
     }
     if (playerPlacement.ownerId !== socket.id) {
       return;
     }
-
-    const player = game.players.find((p) => p.id === playerPlacement.ownerId);
-    const opponent = game.players.find(
-      (p) => p.id === opponentPlacement.ownerId
-    );
-
-    if (player === undefined || opponent === undefined) {
+    if (game.activeAbility !== "swap-then-look") {
       return;
     }
 
-    const playerCardIndex = player.cards.findIndex(
-      (c) => c.placement === playerPlacement.placement
-    );
-    const opponentCardIndex = opponent.cards.findIndex(
-      (c) => c.placement === opponentPlacement.placement
-    );
-    if (playerCardIndex === -1 || opponentCardIndex === -1) {
+    const receivedCard = cardSwap(game, playerPlacement, opponentPlacement);
+
+    if (!receivedCard) {
       return;
     }
-
-    //Remove each card
-    const [playerCard] = player.cards.splice(playerCardIndex, 1);
-    const [opponentCard] = opponent.cards.splice(opponentCardIndex, 1);
-
-    //Swap placement numbers of the cards
-    const temp = opponentCard.placement;
-    opponentCard.placement = playerCard.placement;
-    playerCard.placement = temp;
-
-    //Put them back in the others cards
-    player.cards.push(opponentCard);
-    opponent.cards.push(playerCard);
-
-    response(opponentCard);
-
-    console.log(player.cards);
-    console.log(opponent.cards);
 
     io.to(gameId).emit(
       "cardSwap",
@@ -485,10 +456,66 @@ io.on("connection", (socket: Socket) => {
       }
     );
 
+    response(receivedCard);
+
     endTurn(game);
   };
 
-  const handleLookThenSwap = (myCard: GameCard, their: GameCard) => {};
+  const handleLookThenSwap = (
+    gameId: string,
+    playerPlacement: { ownerId: string; placement: number },
+    opponentPlacement: { ownerId: string; placement: number },
+    ack: () => void
+  ) => {
+    const game = gameHandler[gameId];
+    if (game === undefined) {
+      console.log("Game doesnt exist!");
+      return;
+    }
+    if (game.activePlayerId !== socket.id) {
+      return;
+    }
+    if (playerPlacement.ownerId !== socket.id) {
+      return;
+    }
+    if (game.activeAbility !== "look-then-swap") {
+      return;
+    }
+
+    const success = cardSwap(game, playerPlacement, opponentPlacement);
+
+    if (!success) {
+      return;
+    }
+
+    io.to(gameId).emit(
+      "cardSwap",
+      {
+        ownerId: playerPlacement.ownerId,
+        placement: playerPlacement.placement,
+      },
+      {
+        ownerId: opponentPlacement.ownerId,
+        placement: opponentPlacement.placement,
+      }
+    );
+
+    ack();
+
+    endTurn(game);
+  };
+
+  const handleCancelAbility = (gameId: string) => {
+    const game = gameHandler[gameId];
+    if (game === undefined) {
+      console.log("Game doesnt exist!");
+      return;
+    }
+
+    if (game.activeAbility && game.activePlayerId == socket.id) {
+      endTurn(game);
+    }
+  };
 
   socket.on("restartGame", restartGame);
 
@@ -519,7 +546,47 @@ io.on("connection", (socket: Socket) => {
   socket.on("swapThenLook", handleSwapThenLook);
 
   socket.on("lookThenSwap", handleLookThenSwap);
+
+  socket.on("cancelAbility", handleCancelAbility);
 });
+
+function cardSwap(
+  game: Game,
+  playerPlacement: { ownerId: string; placement: number },
+  opponentPlacement: { ownerId: string; placement: number }
+): GameCard | undefined {
+  const player = game.players.find((p) => p.id === playerPlacement.ownerId);
+  const opponent = game.players.find((p) => p.id === opponentPlacement.ownerId);
+
+  if (player === undefined || opponent === undefined) {
+    return;
+  }
+
+  const playerCardIndex = player.cards.findIndex(
+    (c) => c.placement === playerPlacement.placement
+  );
+  const opponentCardIndex = opponent.cards.findIndex(
+    (c) => c.placement === opponentPlacement.placement
+  );
+  if (playerCardIndex === -1 || opponentCardIndex === -1) {
+    return;
+  }
+
+  //Remove each card
+  const [playerCard] = player.cards.splice(playerCardIndex, 1);
+  const [opponentCard] = opponent.cards.splice(opponentCardIndex, 1);
+
+  //Swap placement numbers of the cards
+  const temp = opponentCard.placement;
+  opponentCard.placement = playerCard.placement;
+  playerCard.placement = temp;
+
+  //Put them back in the others cards
+  player.cards.push(opponentCard);
+  opponent.cards.push(playerCard);
+
+  return opponentCard;
+}
 
 function createCardTimer(
   socket: Socket,
@@ -582,7 +649,6 @@ function startGame(game: Game) {
 }
 
 io.of("/").adapter.on("leave-room", (room, id) => {
-  console.log(room, id);
   const game = gameHandler[room];
   if (game !== undefined) {
     if (game.spectators.includes(id)) {
