@@ -505,6 +505,36 @@ io.on("connection", (socket: Socket) => {
     endTurn(game);
   };
 
+  const handleLookBeforeSwap = (
+    gameId: string,
+    ownerId: string,
+    placement: number,
+    response: (card: GameCard) => void
+  ) => {
+    if (ownerId === socket.id) {
+      return;
+    }
+
+    const game = gameHandler[gameId];
+    if (game === undefined) {
+      console.log("Game doesnt exist!");
+      return;
+    }
+
+    if (
+      game.activePlayerId === socket.id &&
+      game.activeAbility === "look-then-swap" &&
+      !game.hasLooked
+    ) {
+      const card = game.players
+        .find((p) => p.id === ownerId)
+        ?.cards.find((c) => c.placement === placement);
+      if (card === undefined) {
+        return;
+      }
+      response(card);
+    }
+  };
   const handleCancelAbility = (gameId: string) => {
     const game = gameHandler[gameId];
     if (game === undefined) {
@@ -546,6 +576,8 @@ io.on("connection", (socket: Socket) => {
   socket.on("swapThenLook", handleSwapThenLook);
 
   socket.on("lookThenSwap", handleLookThenSwap);
+
+  socket.on("lookBeforeSwap", handleLookBeforeSwap);
 
   socket.on("cancelAbility", handleCancelAbility);
 });

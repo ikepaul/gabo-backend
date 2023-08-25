@@ -19,6 +19,7 @@ export default class Game {
   state: GameState;
   activePlayerId: string;
   activeAbility: Ability | "";
+  hasLooked: boolean;
   pile: Card[];
   pickedUpCard: Card | undefined;
   pickedFromPile: boolean;
@@ -46,6 +47,7 @@ export default class Game {
     this.pickedUpCard = undefined;
     this.pickedFromPile = false;
     this.activeAbility = "";
+    this.hasLooked = false;
     this.pile = [];
     this.deck = [];
     this.state = "Waiting";
@@ -122,6 +124,10 @@ export default class Game {
     this.pickedUpCard = undefined;
     this.state = "Playing";
     this.pile = [];
+    this.activeAbility = "";
+    this.pickedUpCard = undefined;
+    this.pickedFromPile = false;
+    this.hasLooked = false;
   }
 
   dealCards(numOfCards: number) {
@@ -146,6 +152,7 @@ export default class Game {
     this.activeAbility = "";
     this.pickedUpCard = undefined;
     this.pickedFromPile = false;
+    this.hasLooked = false;
   }
   takeCardsFromTopOfDeck(n: number): Card[] {
     const cards: Card[] = [];
