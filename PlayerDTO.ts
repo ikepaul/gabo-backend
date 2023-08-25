@@ -1,10 +1,16 @@
-import { GameCard } from "./Card";
+import { GameCard, GameCardDTO } from "./Card";
 import Player from "./Player";
 
-type PlayerDTO = Omit<Player, "availableGives">
+type PlayerDTO = Omit<Player, "availableGives" | "cards"> & {
+  cards: GameCardDTO[];
+};
 
 export default PlayerDTO;
 
 export function toPlayerDTO(player: Player): PlayerDTO {
-  return {id:player.id, cards: player.cards};
+  const cardsDTO: GameCardDTO[] = player.cards.map((c) => ({
+    ownerId: player.id,
+    placement: c.placement,
+  }));
+  return { id: player.id, cards: cardsDTO };
 }

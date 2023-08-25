@@ -2,7 +2,7 @@ import { createServer } from "http";
 import { Server, Socket } from "socket.io";
 import Game, { Ability } from "./Game";
 import GameHandler from "./GameHandler";
-import { Card, GameCard } from "./Card";
+import { Card, GameCard, GameCardDTO } from "./Card";
 import Player, { InfoGive } from "./Player";
 import PlayerDTO, { toPlayerDTO } from "./PlayerDTO";
 import GameDTO from "./GameDTO";
@@ -16,10 +16,10 @@ interface ServerToClientEvents {
   spectatorAdded: (socketId: string) => void;
   giveCard: (card: InfoGive, availableGives: InfoGive) => void;
   cardFlip: (topCard: Card, ownerId: string, placement: number) => void;
-  punishmentCard: (playerId: string, punishmentCard: GameCard) => void;
+  punishmentCard: (playerId: string, punishmentCard: GameCardDTO) => void;
   drawFromDeck: (deckSize: number) => void;
   updateTopCard: (topCard: Card) => void;
-  handCardSwap: (socketId: string, placement: number, c: GameCard) => void;
+  handCardSwap: (socketId: string, placement: number, c: Card) => void;
   cardSwap: (
     playerPlacement: { ownerId: string; placement: number },
     opponentPlacement: { ownerId: string; placement: number }
@@ -57,8 +57,7 @@ interface ClientToServerEvents {
 
   cardFlip: (
     gameId: string,
-    card: GameCard,
-    ownerId: string,
+    card: GameCardDTO,
     response: (maxTime: number) => void
   ) => void;
 
@@ -83,8 +82,7 @@ interface ClientToServerEvents {
 
   lookOther: (
     gameId: string,
-    ownerId: string,
-    placement: number,
+    card: GameCardDTO,
     response: (card: GameCard) => void
   ) => void;
 }
@@ -195,8 +193,7 @@ io.on("connection", (socket: Socket) => {
 
   const handleCardFlip = (
     gameId: string,
-    card: GameCard,
-    ownerId: string,
+    cardPlacement: GameCardDTO,
     response: (maxTime: number) => void
   ) => {
     const game: Game = gameHandler[gameId];
@@ -205,8 +202,17 @@ io.on("connection", (socket: Socket) => {
       return;
     }
     const topCard = game.topCard();
+    const card = game.players
+      .find((p) => p.id == cardPlacement.ownerId)
+      ?.cards.find((c) => c.placement === cardPlacement.placement);
+
+    console.log(card);
+    if (!card) {
+      return;
+    }
+
     if (topCard !== undefined && topCard.value == card.value) {
-      const owner = game.players.find((p) => p.id === ownerId);
+      const owner = game.players.find((p) => p.id === cardPlacement.ownerId);
       if (owner == undefined) {
         return;
       }
@@ -220,28 +226,50 @@ io.on("connection", (socket: Socket) => {
 
       owner.cards.splice(cardIndex, 1);
       game.pile.unshift({ suit: card.suit, value: card.value }); //Add card to pile
-      io.to(game.id).emit("cardFlip", game.topCard(), ownerId, card.placement);
+      io.to(game.id).emit(
+        "cardFlip",
+        game.topCard(),
+        cardPlacement.ownerId,
+        card.placement
+      );
 
-      if (ownerId !== socket.id) {
+      console.log("emitting card flip");
+
+      if (cardPlacement.ownerId !== socket.id) {
         const clicker = game.players.find((p) => p.id === socket.id);
         if (clicker) {
-          clicker.availableGives.push({ ownerId, placement: card.placement });
+          clicker.availableGives.push({
+            ownerId: cardPlacement.ownerId,
+            placement: card.placement,
+          });
           response(TOTAL_TIME_TO_GIVE);
-          createCardTimer(socket, ownerId, card.placement, clicker);
+          createCardTimer(
+            socket,
+            cardPlacement.ownerId,
+            card.placement,
+            clicker
+          );
         }
       }
     } else {
       const pickedUpCard = game.takeCardFromTopOfDeck();
       const player = game.players.find((p) => p.id === socket.id);
 
+      if (!player) {
+        return;
+      }
+
       // Find first empty place for punishment card
       let placement = game.numOfCards; //Begins at number of cards so we know its a punishment simply because its placement is more than the number of cards in the game.
       while (player?.cards.some((pc) => pc.placement == placement)) {
         placement++;
       }
-      const punishmentCard = { ...pickedUpCard, placement };
+      const punishmentCard = { ...pickedUpCard, placement, ownerId: player.id };
       player?.cards.push(punishmentCard);
-      io.to(game.id).emit("punishmentCard", socket.id, punishmentCard);
+      io.to(game.id).emit("punishmentCard", socket.id, {
+        ownerId: socket.id,
+        placement,
+      });
     }
   };
 
@@ -345,11 +373,12 @@ io.on("connection", (socket: Socket) => {
       if (p) {
         const c = p.cards.find((c) => c.placement === placement);
         if (c) {
-          game.pile.unshift({ suit: c.suit, value: c.value });
+          const newTopCard = { suit: c.suit, value: c.value };
+          game.pile.unshift(newTopCard);
           c.suit = game.pickedUpCard.suit;
           c.value = game.pickedUpCard.value;
           game.pickedUpCard = undefined;
-          io.to(game.id).emit("handCardSwap", socket.id, placement, c);
+          io.to(game.id).emit("handCardSwap", socket.id, placement, newTopCard);
           endTurn(game);
         }
       }
@@ -388,8 +417,7 @@ io.on("connection", (socket: Socket) => {
 
   const handleLookOther = (
     gameId: string,
-    ownerId: string,
-    placement: number,
+    { ownerId, placement }: GameCardDTO,
     response: (card: GameCard) => void
   ) => {
     if (ownerId === socket.id) {
@@ -690,7 +718,7 @@ io.of("/").adapter.on("leave-room", (room, id) => {
 
     if (game.players.some((p) => p.id === id)) {
       game.removePlayer(id);
-      io.to(game.id).emit("playerLeft", game.players, game.activePlayerId);
+      io.to(game.id).emit("playerLeft", game.DTO.players, game.activePlayerId);
     }
   }
 });

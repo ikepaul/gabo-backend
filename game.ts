@@ -2,6 +2,7 @@ import { Card, getRandomDeck, shuffle } from "./Card";
 import GameDTO from "./GameDTO";
 import Player from "./Player";
 import { v4 as uuidv4 } from "uuid";
+import { toPlayerDTO } from "./PlayerDTO";
 
 export type GameState = "Waiting" | "Playing" | "Finished";
 export type Ability =
@@ -67,9 +68,11 @@ export default class Game {
       spectators,
     } = { ...structuredClone(this) };
 
+    const playersDTO = players.map((p) => toPlayerDTO(p));
+
     return {
       state,
-      players,
+      players: playersDTO,
       activePlayerId,
       topCard: pile[0],
       deckSize: deck.length,
@@ -133,7 +136,7 @@ export default class Game {
   dealCards(numOfCards: number) {
     this.players.forEach((p) => {
       p.cards = this.takeCardsFromTopOfDeck(numOfCards).map(
-        (c: Card, i: number) => ({ ...c, placement: i })
+        (c: Card, i: number) => ({ ...c, placement: i, ownerId: p.id })
       );
     });
   }
