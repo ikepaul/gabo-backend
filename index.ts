@@ -6,6 +6,16 @@ import { Card, GameCard, GameCardDTO } from "./Card";
 import Player, { InfoGive } from "./Player";
 import PlayerDTO, { toPlayerDTO } from "./PlayerDTO";
 import GameDTO from "./GameDTO";
+import { initializeApp } from "firebase-admin/app";
+import { UserRecord } from "firebase-admin/lib/auth/user-record";
+import { DecodedIdToken, getAuth } from "firebase-admin/auth";
+import { credential } from "firebase-admin";
+import User from "./User";
+
+const firebaseConfig = {
+  credential: credential.cert("./firebase-credentials.json"),
+};
+const app = initializeApp(firebaseConfig);
 
 const TOTAL_TIME_TO_GIVE = 5000;
 const UPDATE_DELAY_TO_GIVE = 200;
@@ -13,7 +23,7 @@ const UPDATE_DELAY_TO_GIVE = 200;
 const gameHandler: GameHandler = {};
 
 interface ServerToClientEvents {
-  spectatorAdded: (socketId: string) => void;
+  spectatorAdded: (spectator: User) => void;
   giveCard: (card: InfoGive, availableGives: InfoGive) => void;
   cardFlip: (topCard: Card, ownerId: string, placement: number) => void;
   punishmentCard: (punishmentCard: GameCardDTO) => void;
@@ -27,7 +37,7 @@ interface ServerToClientEvents {
   endTurn: (activePlayerId: string) => void;
   gameSetup: (g: GameDTO) => void;
   playerLeft: (updatedPlayers: PlayerDTO[], activePlayerId: string) => void;
-  spectatorLeft: (updatedPlayers: string[]) => void;
+  spectatorLeft: (updatedPlayers: User[]) => void;
   updateTimerGive: (
     ownerId: string,
     placement: number,
@@ -89,7 +99,9 @@ interface ClientToServerEvents {
 
 interface InterServerEvents {}
 
-interface SocketData {}
+interface SocketData {
+  user: UserRecord;
+}
 
 const httpServer = createServer();
 const io = new Server<
@@ -99,6 +111,27 @@ const io = new Server<
   SocketData
 >(httpServer, {
   cors: { origin: "*" },
+});
+
+io.use(async (socket: Socket, next) => {
+  const idToken = socket.handshake.auth.idToken;
+  if (idToken) {
+    const appAuth = getAuth(app);
+    try {
+      const decodedToken: DecodedIdToken = await appAuth.verifyIdToken(idToken);
+      if (decodedToken.uid) {
+        const user = await appAuth.getUser(decodedToken.uid);
+        socket.data.user = user;
+        next();
+      } else {
+        next(new Error("Invalid auth-token"));
+      }
+    } catch (err) {
+      next(new Error("Invalid auth-token"));
+    }
+  } else {
+    next(new Error("No auth-token"));
+  }
 });
 
 function restartGame(gameId: string) {
@@ -118,7 +151,7 @@ io.on("connection", (socket: Socket) => {
   ) => {
     const game = new Game(numOfCards, playerLimit);
     gameHandler[game.id] = game;
-    game.addSpectator(socket.id);
+    game.addSpectator(socket.data.user);
     socket.join(game.id);
     response(game.id);
   };
@@ -133,10 +166,10 @@ io.on("connection", (socket: Socket) => {
       return;
     }
 
-    game.addSpectator(socket.id);
+    game.addSpectator(socket.data.user);
     response("ok");
     socket.join(game.id);
-    io.to(game.id).emit("spectatorAdded", socket.id);
+    io.to(game.id).emit("spectatorAdded", socket.data.user);
   };
 
   const handleLeaveGame = (
@@ -160,7 +193,9 @@ io.on("connection", (socket: Socket) => {
       return;
     }
 
-    const player = game.players.find((p) => p.id === socket.id);
+    const player = game.players.find(
+      (p) => p.user.uid === socket.data.user.uid
+    );
 
     if (player !== undefined && player.availableGives.length > 0) {
       const firstAvailableGive = player.availableGives.shift();
@@ -169,7 +204,7 @@ io.on("connection", (socket: Socket) => {
       }
 
       const opponent = game.players.find(
-        (p) => p.id === firstAvailableGive.ownerId
+        (p) => p.user.uid === firstAvailableGive.ownerId
       );
 
       if (opponent !== undefined) {
@@ -182,7 +217,7 @@ io.on("connection", (socket: Socket) => {
         });
         io.to(game.id).emit(
           "giveCard",
-          { placement, ownerId: socket.id },
+          { placement, ownerId: socket.data.user.uid },
           firstAvailableGive
         );
         socket.emit(
@@ -206,7 +241,7 @@ io.on("connection", (socket: Socket) => {
     }
     const topCard = game.topCard();
     const card = game.players
-      .find((p) => p.id == cardPlacement.ownerId)
+      .find((p) => p.user.uid == cardPlacement.ownerId)
       ?.cards.find((c) => c.placement === cardPlacement.placement);
 
     if (!card) {
@@ -214,7 +249,9 @@ io.on("connection", (socket: Socket) => {
     }
 
     if (topCard !== undefined && topCard.value == card.value) {
-      const owner = game.players.find((p) => p.id === cardPlacement.ownerId);
+      const owner = game.players.find(
+        (p) => p.user.uid === cardPlacement.ownerId
+      );
       if (owner == undefined) {
         return;
       }
@@ -235,8 +272,10 @@ io.on("connection", (socket: Socket) => {
         card.placement
       );
 
-      if (cardPlacement.ownerId !== socket.id) {
-        const clicker = game.players.find((p) => p.id === socket.id);
+      if (cardPlacement.ownerId !== socket.data.user.uid) {
+        const clicker = game.players.find(
+          (p) => p.user.uid === socket.data.user.uid
+        );
         if (clicker) {
           clicker.availableGives.push({
             ownerId: cardPlacement.ownerId,
@@ -253,7 +292,9 @@ io.on("connection", (socket: Socket) => {
       }
     } else {
       const pickedUpCard = game.takeCardFromTopOfDeck();
-      const player = game.players.find((p) => p.id === socket.id);
+      const player = game.players.find(
+        (p) => p.user.uid === socket.data.user.uid
+      );
 
       if (!player) {
         return;
@@ -264,7 +305,11 @@ io.on("connection", (socket: Socket) => {
       while (player?.cards.some((pc) => pc.placement == placement)) {
         placement++;
       }
-      const punishmentCard = { ...pickedUpCard, placement, ownerId: player.id };
+      const punishmentCard = {
+        ...pickedUpCard,
+        placement,
+        ownerId: player.user.uid,
+      };
       player?.cards.push(punishmentCard);
       io.to(game.id).emit("punishmentCard", punishmentCard as GameCardDTO);
     }
@@ -280,7 +325,7 @@ io.on("connection", (socket: Socket) => {
       return;
     }
     if (
-      game.activePlayerId === socket.id &&
+      game.activePlayerId === socket.data.user.uid &&
       !game.pickedUpCard &&
       !game.activeAbility
     ) {
@@ -302,7 +347,7 @@ io.on("connection", (socket: Socket) => {
       return;
     }
     if (
-      game.activePlayerId === socket.id &&
+      game.activePlayerId === socket.data.user.uid &&
       !game.pickedUpCard &&
       !game.activeAbility &&
       game.topCard()
@@ -319,7 +364,7 @@ io.on("connection", (socket: Socket) => {
       console.log("Game doesnt exist!");
       return;
     }
-    if (game.activePlayerId === socket.id && game.pickedUpCard) {
+    if (game.activePlayerId === socket.data.user.uid && game.pickedUpCard) {
       ack();
       game.pile.unshift(game.pickedUpCard);
       io.to(game.id).emit("updateTopCard", game.pile[0]);
@@ -365,8 +410,8 @@ io.on("connection", (socket: Socket) => {
       console.log("Game doesnt exist!");
       return;
     }
-    if (game.activePlayerId === socket.id && game.pickedUpCard) {
-      const p = game.players.find((p) => p.id === socket.id);
+    if (game.activePlayerId === socket.data.user.uid && game.pickedUpCard) {
+      const p = game.players.find((p) => p.user.uid === socket.data.user.uid);
       if (p) {
         const c = p.cards.find((c) => c.placement === placement);
         if (c) {
@@ -375,7 +420,12 @@ io.on("connection", (socket: Socket) => {
           c.suit = game.pickedUpCard.suit;
           c.value = game.pickedUpCard.value;
           game.pickedUpCard = undefined;
-          io.to(game.id).emit("handCardSwap", socket.id, placement, newTopCard);
+          io.to(game.id).emit(
+            "handCardSwap",
+            socket.data.user.uid,
+            placement,
+            newTopCard
+          );
           endTurn(game);
         }
       }
@@ -398,11 +448,11 @@ io.on("connection", (socket: Socket) => {
     }
 
     if (
-      game.activePlayerId === socket.id &&
+      game.activePlayerId === socket.data.user.uid &&
       game.activeAbility === "look-self"
     ) {
       const card = game.players
-        .find((p) => p.id === socket.id)
+        .find((p) => p.user.uid === socket.data.user.uid)
         ?.cards.find((c) => c.placement === placement);
       if (card === undefined) {
         return "Card doesnt exist";
@@ -417,7 +467,7 @@ io.on("connection", (socket: Socket) => {
     { ownerId, placement }: GameCardDTO,
     response: (card: GameCard) => void
   ) => {
-    if (ownerId === socket.id) {
+    if (ownerId === socket.data.user.uid) {
       return;
     }
 
@@ -428,11 +478,11 @@ io.on("connection", (socket: Socket) => {
     }
 
     if (
-      game.activePlayerId === socket.id &&
+      game.activePlayerId === socket.data.user.uid &&
       game.activeAbility === "look-other"
     ) {
       const card = game.players
-        .find((p) => p.id === ownerId)
+        .find((p) => p.user.uid === ownerId)
         ?.cards.find((c) => c.placement === placement);
       if (card === undefined) {
         return;
@@ -453,10 +503,10 @@ io.on("connection", (socket: Socket) => {
       console.log("Game doesnt exist!");
       return;
     }
-    if (game.activePlayerId !== socket.id) {
+    if (game.activePlayerId !== socket.data.user.uid) {
       return;
     }
-    if (playerPlacement.ownerId !== socket.id) {
+    if (playerPlacement.ownerId !== socket.data.user.uid) {
       return;
     }
     if (game.activeAbility !== "swap-then-look") {
@@ -497,10 +547,10 @@ io.on("connection", (socket: Socket) => {
       console.log("Game doesnt exist!");
       return;
     }
-    if (game.activePlayerId !== socket.id) {
+    if (game.activePlayerId !== socket.data.user.uid) {
       return;
     }
-    if (playerPlacement.ownerId !== socket.id) {
+    if (playerPlacement.ownerId !== socket.data.user.uid) {
       return;
     }
     if (game.activeAbility !== "look-then-swap") {
@@ -536,7 +586,7 @@ io.on("connection", (socket: Socket) => {
     placement: number,
     response: (card: GameCard) => void
   ) => {
-    if (ownerId === socket.id) {
+    if (ownerId === socket.data.user.uid) {
       return;
     }
 
@@ -547,12 +597,12 @@ io.on("connection", (socket: Socket) => {
     }
 
     if (
-      game.activePlayerId === socket.id &&
+      game.activePlayerId === socket.data.user.uid &&
       game.activeAbility === "look-then-swap" &&
       !game.hasLooked
     ) {
       const card = game.players
-        .find((p) => p.id === ownerId)
+        .find((p) => p.user.uid === ownerId)
         ?.cards.find((c) => c.placement === placement);
       if (card === undefined) {
         return;
@@ -567,7 +617,7 @@ io.on("connection", (socket: Socket) => {
       return;
     }
 
-    if (game.activeAbility && game.activePlayerId == socket.id) {
+    if (game.activeAbility && game.activePlayerId == socket.data.user.uid) {
       endTurn(game);
     }
   };
@@ -612,8 +662,12 @@ function cardSwap(
   playerPlacement: { ownerId: string; placement: number },
   opponentPlacement: { ownerId: string; placement: number }
 ): GameCard | undefined {
-  const player = game.players.find((p) => p.id === playerPlacement.ownerId);
-  const opponent = game.players.find((p) => p.id === opponentPlacement.ownerId);
+  const player = game.players.find(
+    (p) => p.user.uid === playerPlacement.ownerId
+  );
+  const opponent = game.players.find(
+    (p) => p.user.uid === opponentPlacement.ownerId
+  );
 
   if (player === undefined || opponent === undefined) {
     return;
@@ -707,12 +761,12 @@ function startGame(game: Game) {
 io.of("/").adapter.on("leave-room", (room, id) => {
   const game = gameHandler[room];
   if (game !== undefined) {
-    if (game.spectators.includes(id)) {
+    if (game.spectators.some((s) => s.uid === id)) {
       game.removeSpectator(id);
       io.to(game.id).emit("spectatorLeft", game.spectators);
     }
 
-    if (game.players.some((p) => p.id === id)) {
+    if (game.players.some((p) => p.user.uid === id)) {
       game.removePlayer(id);
       io.to(game.id).emit("playerLeft", game.DTO.players, game.activePlayerId);
     }

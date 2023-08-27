@@ -1,4 +1,5 @@
 import { GameCard } from "./Card";
+import User from "./User";
 
 export interface InfoGive {
   ownerId: string;
@@ -6,8 +7,7 @@ export interface InfoGive {
 }
 
 export default interface Player {
-  id: string;
+  user: User;
   cards: GameCard[];
   availableGives: InfoGive[];
 }
-

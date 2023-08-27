@@ -3,6 +3,7 @@ import GameDTO from "./GameDTO";
 import Player from "./Player";
 import { v4 as uuidv4 } from "uuid";
 import { toPlayerDTO } from "./PlayerDTO";
+import User from "./User";
 
 export type GameState = "Waiting" | "Playing" | "Finished";
 export type Ability =
@@ -16,7 +17,7 @@ const maxPlayerLimit = 4;
 const minPlayerLimit = 1;
 export default class Game {
   players: Player[];
-  spectators: string[]; //List of ids
+  spectators: User[]; //List of ids
   state: GameState;
   activePlayerId: string;
   activeAbility: Ability | "";
@@ -81,30 +82,30 @@ export default class Game {
     };
   }
 
-  addPlayer(userId: string) {
-    const player = { id: userId, availableGives: [], cards: [] };
+  addPlayer(user: User) {
+    const player = { user, availableGives: [], cards: [] };
     this.players.push(player);
     return player;
   }
 
   removePlayer(playerId: string) {
-    const playerIndex = this.players.findIndex((p) => p.id === playerId);
+    const playerIndex = this.players.findIndex((p) => p.user.uid === playerId);
     if (playerIndex !== -1) {
       if (this.activePlayerId == playerId) {
         this.activePlayerId =
-          this.players[(playerIndex + 1) % this.players.length].id;
+          this.players[(playerIndex + 1) % this.players.length].user.uid;
       }
       this.deck.push(...this.players[playerIndex].cards);
       this.players.splice(playerIndex, 1);
     }
   }
 
-  addSpectator(userId: string) {
-    this.spectators.push(userId);
+  addSpectator(user: User) {
+    this.spectators.push(user);
   }
 
   removeSpectator(userId: string) {
-    const index = this.spectators.findIndex((s) => s === userId);
+    const index = this.spectators.findIndex((s) => s.uid === userId);
     if (index !== -1) {
       this.spectators.splice(index, 1);
     }
@@ -123,7 +124,7 @@ export default class Game {
     }
     this.players.forEach((p) => (p.availableGives = []));
     this.dealCards(this.numOfCards);
-    this.activePlayerId = this.players[0].id;
+    this.activePlayerId = this.players[0].user.uid;
     this.pickedUpCard = undefined;
     this.state = "Playing";
     this.pile = [];
@@ -136,7 +137,7 @@ export default class Game {
   dealCards(numOfCards: number) {
     this.players.forEach((p) => {
       p.cards = this.takeCardsFromTopOfDeck(numOfCards).map(
-        (c: Card, i: number) => ({ ...c, placement: i, ownerId: p.id })
+        (c: Card, i: number) => ({ ...c, placement: i, ownerId: p.user.uid })
       );
     });
   }
@@ -146,10 +147,10 @@ export default class Game {
   }
   endTurn() {
     const currentIndex: number = this.players.findIndex(
-      (p) => p.id === this.activePlayerId
+      (p) => p.user.uid === this.activePlayerId
     );
     const nextPlayer =
-      this.players[(currentIndex + 1) % this.players.length].id;
+      this.players[(currentIndex + 1) % this.players.length].user.uid;
 
     this.activePlayerId = nextPlayer;
     this.activeAbility = "";
