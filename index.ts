@@ -56,7 +56,10 @@ interface ClientToServerEvents {
     response: (gameId: string) => void
   ) => void;
 
-  joinGame: (gameId: string, response: (status: "ok" | "404") => void) => void;
+  joinGame: (
+    gameId: string,
+    response: (status: "ok" | "404" | "409") => void
+  ) => void;
 
   leaveGame: (
     gameId: string,
@@ -157,12 +160,20 @@ io.on("connection", (socket: Socket) => {
   };
   const handleJoinGame = (
     gameId: string,
-    response: (status: "ok" | "404") => void
+    response: (status: "ok" | "404" | "409") => void
   ) => {
     const game: Game = gameHandler[gameId];
     if (game === undefined) {
       console.log("Game doesnt exist!");
       response("404");
+      return;
+    }
+
+    if (
+      game.players.some((p) => p.user.uid === socket.data.user.uid) ||
+      game.spectators.some((s) => s.uid === socket.data.user.uid)
+    ) {
+      response("409");
       return;
     }
 
