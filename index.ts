@@ -770,15 +770,16 @@ function startGame(game: Game) {
 }
 
 io.of("/").adapter.on("leave-room", (room, id) => {
+  const uid = io.sockets.sockets.get(id)?.data.user.uid;
   const game = gameHandler[room];
-  if (game !== undefined) {
-    if (game.spectators.some((s) => s.uid === id)) {
-      game.removeSpectator(id);
+  if (game !== undefined && uid) {
+    if (game.spectators.some((s) => s.uid === uid)) {
+      game.removeSpectator(uid);
       io.to(game.id).emit("spectatorLeft", game.spectators);
     }
 
-    if (game.players.some((p) => p.user.uid === id)) {
-      game.removePlayer(id);
+    if (game.players.some((p) => p.user.uid === uid)) {
+      game.removePlayer(uid);
       io.to(game.id).emit("playerLeft", game.DTO.players, game.activePlayerId);
     }
   }
