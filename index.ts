@@ -133,6 +133,27 @@ function restartGame(gameId: string) {
 }
 
 io.on("connection", (socket: Socket) => {
+  socket.use((event, next) => {
+    const game: Game = gameHandler[socket.data.currentGameId];
+
+    if (!game || game.state !== "Setup") {
+      next();
+      return;
+    }
+
+    switch (event[0]) {
+      case "startPeek":
+      case "restartGame":
+      case "leaveGame":
+      case "getGame":
+        next();
+        return;
+      default:
+        next(Error());
+        return;
+    }
+  });
+
   const handleCreateGame = (
     numOfCards: number,
     playerLimit: number,
