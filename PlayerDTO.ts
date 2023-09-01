@@ -7,10 +7,14 @@ type PlayerDTO = Omit<Player, "availableGives" | "cards"> & {
 
 export default PlayerDTO;
 
-export function toPlayerDTO(player: Player): PlayerDTO {
-  const cardsDTO: GameCardDTO[] = player.cards.map((c) => ({
-    ownerId: player.user.uid,
+export function toPlayerDTO({
+  user,
+  cards,
+  numOfStartPeeks,
+}: Player): PlayerDTO {
+  const cardsDTO: GameCardDTO[] = cards.map((c) => ({
+    ownerId: user.uid,
     placement: c.placement,
   }));
-  return { user: player.user, cards: cardsDTO };
+  return { user, cards: cardsDTO, numOfStartPeeks };
 }

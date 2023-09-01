@@ -10,4 +10,5 @@ export default interface Player {
   user: User;
   cards: GameCard[];
   availableGives: InfoGive[];
+  numOfStartPeeks: number;
 }

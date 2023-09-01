@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import { toPlayerDTO } from "./PlayerDTO";
 import User from "./User";
 
-export type GameState = "Waiting" | "Playing" | "Finished";
+export type GameState = "Waiting" | "Setup" | "Playing" | "Finished";
 export type Ability =
   | "look-self"
   | "look-other"
@@ -15,17 +15,22 @@ const maxNumOfCards = 8;
 const minNumOfCards = 1;
 const maxPlayerLimit = 4;
 const minPlayerLimit = 1;
+const numOfStartPeeks = 2;
+
 export default class Game {
   players: Player[];
   spectators: User[]; //List of ids
   state: GameState;
   activePlayerId: string;
+
   activeAbility: Ability | "";
   hasLooked: boolean;
+
   pile: Card[];
+  deck: Card[];
   pickedUpCard: Card | undefined;
   pickedFromPile: boolean;
-  deck: Card[];
+
   id: string;
   numOfCards: number;
   playerLimit: number;
@@ -83,7 +88,7 @@ export default class Game {
   }
 
   addPlayer(user: User) {
-    const player = { user, availableGives: [], cards: [] };
+    const player = { user, numOfStartPeeks: 0, availableGives: [], cards: [] };
     this.players.push(player);
     return player;
   }
@@ -122,11 +127,14 @@ export default class Game {
         this.addPlayer(newPlayer);
       }
     }
-    this.players.forEach((p) => (p.availableGives = []));
+    this.players.forEach((p) => {
+      p.availableGives = [];
+      p.numOfStartPeeks = numOfStartPeeks;
+    });
     this.dealCards(this.numOfCards);
     this.activePlayerId = this.players[0].user.uid;
     this.pickedUpCard = undefined;
-    this.state = "Playing";
+    this.state = "Setup";
     this.pile = [];
     this.activeAbility = "";
     this.pickedUpCard = undefined;
@@ -186,5 +194,9 @@ export default class Game {
     }
     this.pickedFromPile = true;
     return card;
+  }
+
+  get everyoneHasLooked(): boolean {
+    return this.players.every((player) => player.numOfStartPeeks <= 0);
   }
 }

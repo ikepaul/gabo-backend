@@ -45,6 +45,7 @@ interface ServerToClientEvents {
   ) => void;
   timeoutGive: (ownerId: string, placement: number) => void;
   useAbility: (ability: Ability) => void;
+  everyoneHasLooked: () => void;
 }
 
 interface ClientToServerEvents {
@@ -96,6 +97,12 @@ interface ClientToServerEvents {
   lookOther: (
     gameId: string,
     card: GameCardDTO,
+    response: (card: GameCard) => void
+  ) => void;
+
+  startPeek: (
+    gameId: string,
+    placement: number,
     response: (card: GameCard) => void
   ) => void;
 }
@@ -634,6 +641,38 @@ io.on("connection", (socket: Socket) => {
     }
   };
 
+  const handleStartPeek = (
+    gameId: string,
+    placement: number,
+    response: (card: GameCard) => void
+  ) => {
+    const game = gameHandler[gameId];
+    if (game === undefined) {
+      console.log("Game doesnt exist!");
+      return;
+    }
+    const player = game.players.find(
+      (p) => p.user.uid === socket.data.user.uid
+    );
+    if (player == undefined || player.numOfStartPeeks <= 0) {
+      return;
+    }
+
+    const card = game.players
+      .find((p) => p.user.uid === socket.data.user.uid)
+      ?.cards.find((c) => c.placement === placement);
+    if (card === undefined) {
+      return "Card doesnt exist";
+    }
+    player.numOfStartPeeks -= 1;
+    response(card);
+
+    if (game.everyoneHasLooked) {
+      game.state = "Playing";
+      io.to(game.id).emit("everyoneHasLooked");
+    }
+  };
+
   socket.on("restartGame", restartGame);
 
   socket.on("createGame", handleCreateGame);
@@ -667,6 +706,8 @@ io.on("connection", (socket: Socket) => {
   socket.on("lookBeforeSwap", handleLookBeforeSwap);
 
   socket.on("cancelAbility", handleCancelAbility);
+
+  socket.on("startPeek", handleStartPeek);
 });
 
 function cardSwap(
