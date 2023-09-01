@@ -618,6 +618,7 @@ io.on("connection", (socket: Socket) => {
       if (card === undefined) {
         return;
       }
+      game.hasLooked = true;
       response(card);
     }
   };
