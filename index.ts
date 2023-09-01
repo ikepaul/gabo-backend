@@ -62,55 +62,34 @@ interface ClientToServerEvents {
     response: (status: "ok" | "404" | "409") => void
   ) => void;
 
-  leaveGame: (
-    gameId: string,
-    response: (successOrError: string) => void
-  ) => void;
+  leaveGame: (response: (successOrError: string) => void) => void;
 
-  giveCard: (gameId: string, placement: number) => void;
+  giveCard: (placement: number) => void;
 
-  cardFlip: (
-    gameId: string,
-    card: GameCardDTO,
-    response: (maxTime: number) => void
-  ) => void;
+  cardFlip: (card: GameCardDTO, response: (maxTime: number) => void) => void;
 
-  drawFromDeck: (gameId: string, response: (card: Card) => void) => void;
+  drawFromDeck: (response: (card: Card) => void) => void;
 
-  drawFromPile: (
-    gameId: string,
-    response: (card: Card, topCard: Card) => void
-  ) => void;
+  drawFromPile: (response: (card: Card, topCard: Card) => void) => void;
 
-  putOnPile: (gameId: string, ack: () => void) => void;
+  putOnPile: (ack: () => void) => void;
 
-  handCardSwap: (gameId: string, placement: number) => void;
+  handCardSwap: (placement: number) => void;
 
   getGame: (gameId: string, response: (game: GameDTO) => void) => void;
 
-  lookSelf: (
-    gameId: string,
-    placement: number,
-    response: (card: GameCard) => void
-  ) => void;
+  lookSelf: (placement: number, response: (card: GameCard) => void) => void;
 
-  lookOther: (
-    gameId: string,
-    card: GameCardDTO,
-    response: (card: GameCard) => void
-  ) => void;
+  lookOther: (card: GameCardDTO, response: (card: GameCard) => void) => void;
 
-  startPeek: (
-    gameId: string,
-    placement: number,
-    response: (card: GameCard) => void
-  ) => void;
+  startPeek: (placement: number, response: (card: GameCard) => void) => void;
 }
 
 interface InterServerEvents {}
 
 interface SocketData {
   user: UserRecord;
+  currentGameId: string | undefined;
 }
 
 const httpServer = createServer();
@@ -163,6 +142,7 @@ io.on("connection", (socket: Socket) => {
     gameHandler[game.id] = game;
     game.addSpectator(socket.data.user);
     socket.join(game.id);
+    socket.data.currentGameId = game.id;
     response(game.id);
   };
   const handleJoinGame = (
@@ -187,25 +167,24 @@ io.on("connection", (socket: Socket) => {
     game.addSpectator(socket.data.user);
     response("ok");
     socket.join(game.id);
+    socket.data.currentGameId = game.id;
     io.to(game.id).emit("spectatorAdded", socket.data.user);
   };
 
-  const handleLeaveGame = (
-    gameId: string,
-    response: (successOrError: string) => void
-  ) => {
-    const game: Game = gameHandler[gameId];
+  const handleLeaveGame = (response: (successOrError: string) => void) => {
+    const game: Game = gameHandler[socket.data.currentGameId];
     if (game === undefined) {
       console.log("Game doesnt exist!");
       response("404");
       return;
     }
     socket.leave(game.id);
+    socket.data.currentGameId = undefined;
     response("Success");
   };
 
-  const handleGiveCard = (gameId: string, placement: number) => {
-    const game: Game = gameHandler[gameId];
+  const handleGiveCard = (placement: number) => {
+    const game: Game = gameHandler[socket.data.currentGameId];
     if (game === undefined) {
       console.log("Game doesnt exist!");
       return;
@@ -248,11 +227,10 @@ io.on("connection", (socket: Socket) => {
   };
 
   const handleCardFlip = (
-    gameId: string,
     cardPlacement: GameCardDTO,
     response: (maxTime: number) => void
   ) => {
-    const game: Game = gameHandler[gameId];
+    const game: Game = gameHandler[socket.data.currentGameId];
     if (game === undefined) {
       console.log("Game doesnt exist!");
       return;
@@ -333,11 +311,8 @@ io.on("connection", (socket: Socket) => {
     }
   };
 
-  const handleDrawFromDeck = (
-    gameId: string,
-    response: (card: Card) => void
-  ) => {
-    const game: Game = gameHandler[gameId];
+  const handleDrawFromDeck = (response: (card: Card) => void) => {
+    const game: Game = gameHandler[socket.data.currentGameId];
     if (game === undefined) {
       console.log("Game doesnt exist!");
       return;
@@ -356,10 +331,9 @@ io.on("connection", (socket: Socket) => {
   };
 
   const handleDrawFromPile = (
-    gameId: string,
     response: (card: Card, topCard: Card) => void
   ) => {
-    const game: Game = gameHandler[gameId];
+    const game: Game = gameHandler[socket.data.currentGameId];
     if (game === undefined) {
       console.log("Game doesnt exist!");
       return;
@@ -376,8 +350,8 @@ io.on("connection", (socket: Socket) => {
     }
   };
 
-  const handlePutOnPile = (gameId: string, ack: () => void) => {
-    const game: Game = gameHandler[gameId];
+  const handlePutOnPile = (ack: () => void) => {
+    const game: Game = gameHandler[socket.data.currentGameId];
     if (game === undefined) {
       console.log("Game doesnt exist!");
       return;
@@ -422,8 +396,8 @@ io.on("connection", (socket: Socket) => {
     }
   };
 
-  const handleHandCardSwap = (gameId: string, placement: number) => {
-    const game: Game = gameHandler[gameId];
+  const handleHandCardSwap = (placement: number) => {
+    const game: Game = gameHandler[socket.data.currentGameId];
     if (game === undefined) {
       console.log("Game doesnt exist!");
       return;
@@ -455,11 +429,10 @@ io.on("connection", (socket: Socket) => {
   };
 
   const handleLookSelf = (
-    gameId: string,
     placement: number,
     response: (card: GameCard) => void
   ) => {
-    const game = gameHandler[gameId];
+    const game = gameHandler[socket.data.currentGameId];
     if (game === undefined) {
       console.log("Game doesnt exist!");
       return;
@@ -481,7 +454,6 @@ io.on("connection", (socket: Socket) => {
   };
 
   const handleLookOther = (
-    gameId: string,
     { ownerId, placement }: GameCardDTO,
     response: (card: GameCard) => void
   ) => {
@@ -489,7 +461,7 @@ io.on("connection", (socket: Socket) => {
       return;
     }
 
-    const game = gameHandler[gameId];
+    const game = gameHandler[socket.data.currentGameId];
     if (game === undefined) {
       console.log("Game doesnt exist!");
       return;
@@ -511,12 +483,11 @@ io.on("connection", (socket: Socket) => {
   };
 
   const handleSwapThenLook = (
-    gameId: string,
     playerPlacement: { ownerId: string; placement: number },
     opponentPlacement: { ownerId: string; placement: number },
     response: (receivedCard: GameCard) => void
   ) => {
-    const game = gameHandler[gameId];
+    const game = gameHandler[socket.data.currentGameId];
     if (game === undefined) {
       console.log("Game doesnt exist!");
       return;
@@ -537,7 +508,7 @@ io.on("connection", (socket: Socket) => {
       return;
     }
 
-    io.to(gameId).emit(
+    io.to(socket.data.currentGameId).emit(
       "cardSwap",
       {
         ownerId: playerPlacement.ownerId,
@@ -555,12 +526,11 @@ io.on("connection", (socket: Socket) => {
   };
 
   const handleLookThenSwap = (
-    gameId: string,
     playerPlacement: { ownerId: string; placement: number },
     opponentPlacement: { ownerId: string; placement: number },
     ack: () => void
   ) => {
-    const game = gameHandler[gameId];
+    const game = gameHandler[socket.data.currentGameId];
     if (game === undefined) {
       console.log("Game doesnt exist!");
       return;
@@ -581,7 +551,7 @@ io.on("connection", (socket: Socket) => {
       return;
     }
 
-    io.to(gameId).emit(
+    io.to(socket.data.currentGameId).emit(
       "cardSwap",
       {
         ownerId: playerPlacement.ownerId,
@@ -599,7 +569,6 @@ io.on("connection", (socket: Socket) => {
   };
 
   const handleLookBeforeSwap = (
-    gameId: string,
     ownerId: string,
     placement: number,
     response: (card: GameCard) => void
@@ -608,7 +577,7 @@ io.on("connection", (socket: Socket) => {
       return;
     }
 
-    const game = gameHandler[gameId];
+    const game = gameHandler[socket.data.currentGameId];
     if (game === undefined) {
       console.log("Game doesnt exist!");
       return;
@@ -629,8 +598,8 @@ io.on("connection", (socket: Socket) => {
       response(card);
     }
   };
-  const handleCancelAbility = (gameId: string) => {
-    const game = gameHandler[gameId];
+  const handleCancelAbility = () => {
+    const game = gameHandler[socket.data.currentGameId];
     if (game === undefined) {
       console.log("Game doesnt exist!");
       return;
@@ -642,11 +611,10 @@ io.on("connection", (socket: Socket) => {
   };
 
   const handleStartPeek = (
-    gameId: string,
     placement: number,
     response: (card: GameCard) => void
   ) => {
-    const game = gameHandler[gameId];
+    const game = gameHandler[socket.data.currentGameId];
     if (game === undefined) {
       console.log("Game doesnt exist!");
       return;
