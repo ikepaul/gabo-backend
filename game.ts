@@ -1,4 +1,4 @@
-import { Card, getRandomDeck, shuffle } from "./Card";
+import { Card, GameCard, getRandomDeck, shuffle } from "./Card";
 import GameDTO from "./GameDTO";
 import Player from "./Player";
 import { v4 as uuidv4 } from "uuid";
@@ -88,7 +88,14 @@ export default class Game {
   }
 
   addPlayer(user: User) {
-    const player = { user, numOfStartPeeks: 0, availableGives: [], cards: [] };
+    const player = {
+      user,
+      numOfStartPeeks: 0,
+      availableGives: [],
+      cards: [],
+      score: this.highestScore(),
+      calledGabo: false,
+    };
     this.players.push(player);
     return player;
   }
@@ -150,22 +157,53 @@ export default class Game {
     });
   }
 
-  topCard(): Card {
-    return this.pile[0];
-  }
-  endTurn() {
-    const currentIndex: number = this.players.findIndex(
-      (p) => p.user.uid === this.activePlayerId
-    );
-    const nextPlayer =
-      this.players[(currentIndex + 1) % this.players.length].user.uid;
-
-    this.activePlayerId = nextPlayer;
+  endGame() {
+    this.activePlayerId = "";
     this.activeAbility = "";
     this.pickedUpCard = undefined;
     this.pickedFromPile = false;
     this.hasLooked = false;
+
+    this.players.forEach((player, i) => {
+      const handValue = this.calcHandValue(player.cards);
+      if (player.calledGabo) {
+        if (handValue > 5) {
+          player.score += 25;
+          return;
+        }
+        //Implement counter gabo
+        return;
+      }
+      player.score += handValue;
+    });
+    this.state = "Finished";
   }
+
+  topCard(): Card {
+    return this.pile[0];
+  }
+  endTurn(): boolean {
+    const currentIndex: number = this.players.findIndex(
+      (p) => p.user.uid === this.activePlayerId
+    );
+    const nextPlayer = this.players[(currentIndex + 1) % this.players.length];
+
+    if (nextPlayer.calledGabo) {
+      console.log("endinggame");
+      this.endGame();
+      return true;
+    }
+
+    const nextPlayerId = nextPlayer.user.uid;
+
+    this.activePlayerId = nextPlayerId;
+    this.activeAbility = "";
+    this.pickedUpCard = undefined;
+    this.pickedFromPile = false;
+    this.hasLooked = false;
+    return false;
+  }
+
   takeCardsFromTopOfDeck(n: number): Card[] {
     const cards: Card[] = [];
 
@@ -198,5 +236,48 @@ export default class Game {
 
   get everyoneHasLooked(): boolean {
     return this.players.every((player) => player.numOfStartPeeks <= 0);
+  }
+
+  highestScore(): number {
+    let score = 0;
+    this.players.forEach((p) => {
+      score = p.score > score ? p.score : score;
+    });
+    return score;
+  }
+
+  callGabo(uid: string): boolean {
+    if (this.activePlayerId !== uid) {
+      return false;
+    }
+    const player = this.players.find((p) => p.user.uid == uid);
+    if (!player) {
+      return false;
+    }
+
+    player.calledGabo = true;
+    return true; //No error when calling gabo
+  }
+  private calcHandValue(cards: GameCard[]): number {
+    return cards.reduce((a, b) => a + this.cardValue(b), 0);
+  }
+
+  private cardValue(card: GameCard): number {
+    if (card.suit == "Hearts" && card.value == "King") {
+      return 0;
+    }
+    switch (card.value) {
+      case "Ace":
+        return 1;
+      case "King":
+        return 13;
+      case "Queen":
+        return 12;
+      case "Jack":
+        return 11;
+      case "Joker":
+        return 1;
+    }
+    return card.value;
   }
 }

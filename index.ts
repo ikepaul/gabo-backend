@@ -46,6 +46,8 @@ interface ServerToClientEvents {
   timeoutGive: (ownerId: string, placement: number) => void;
   useAbility: (ability: Ability) => void;
   everyoneHasLooked: () => void;
+  gaboCalled: (playerId: string) => void;
+  gameEnded: (game: GameDTO) => void;
 }
 
 interface ClientToServerEvents {
@@ -83,6 +85,8 @@ interface ClientToServerEvents {
   lookOther: (card: GameCardDTO, response: (card: GameCard) => void) => void;
 
   startPeek: (placement: number, response: (card: GameCard) => void) => void;
+
+  callGabo: () => void;
 }
 
 interface InterServerEvents {}
@@ -136,7 +140,11 @@ io.on("connection", (socket: Socket) => {
   socket.use((event, next) => {
     const game: Game = gameHandler[socket.data.currentGameId];
 
-    if (!game || game.state !== "Setup") {
+    if (!game) {
+      next();
+      return;
+    }
+    if (game.state !== "Setup" && game.state !== "Finished") {
       next();
       return;
     }
@@ -662,6 +670,19 @@ io.on("connection", (socket: Socket) => {
     }
   };
 
+  const handleCallGabo = () => {
+    const game = gameHandler[socket.data.currentGameId];
+    if (game === undefined) {
+      console.log("Game doesnt exist!");
+      return;
+    }
+
+    const success = game.callGabo(socket.data.user.uid);
+    if (success) {
+      io.to(socket.data.currentGameId).emit("gaboCalled", socket.data.user.uid);
+    }
+  };
+
   socket.on("restartGame", restartGame);
 
   socket.on("createGame", handleCreateGame);
@@ -697,6 +718,8 @@ io.on("connection", (socket: Socket) => {
   socket.on("cancelAbility", handleCancelAbility);
 
   socket.on("startPeek", handleStartPeek);
+
+  socket.on("callGabo", handleCallGabo);
 });
 
 function cardSwap(
@@ -790,9 +813,13 @@ function createTimerWithUpdates(
 }
 
 function endTurn(game: Game) {
-  game.endTurn();
+  const gameEnded = game.endTurn();
 
   io.to(game.id).emit("endTurn", game.activePlayerId);
+
+  if (gameEnded) {
+    io.to(game.id).emit("gameEnded", game.DTO);
+  }
 }
 
 function startGame(game: Game) {

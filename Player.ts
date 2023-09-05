@@ -11,4 +11,6 @@ export default interface Player {
   cards: GameCard[];
   availableGives: InfoGive[];
   numOfStartPeeks: number;
+  score: number;
+  calledGabo: boolean;
 }

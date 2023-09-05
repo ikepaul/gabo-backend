@@ -11,10 +11,12 @@ export function toPlayerDTO({
   user,
   cards,
   numOfStartPeeks,
+  score,
+  calledGabo,
 }: Player): PlayerDTO {
   const cardsDTO: GameCardDTO[] = cards.map((c) => ({
     ownerId: user.uid,
     placement: c.placement,
   }));
-  return { user, cards: cardsDTO, numOfStartPeeks };
+  return { user, cards: cardsDTO, numOfStartPeeks, score, calledGabo };
 }
