@@ -11,6 +11,7 @@ import { UserRecord } from "firebase-admin/lib/auth/user-record";
 import { DecodedIdToken, getAuth } from "firebase-admin/auth";
 import { credential } from "firebase-admin";
 import User from "./User";
+import GameInfo from "./GameInfo";
 
 const firebaseConfig = {
   credential: credential.cert("./firebase-credentials.json"),
@@ -54,10 +55,13 @@ interface ClientToServerEvents {
   restartGame: (gameId: string) => void;
 
   createGame: (
+    name: string,
     numOfCards: number,
     playerLimit: number,
     response: (gameId: string) => void
   ) => void;
+
+  getGameList: (response: (games: GameInfo[]) => void) => void;
 
   joinGame: (
     gameId: string,
@@ -163,16 +167,22 @@ io.on("connection", (socket: Socket) => {
   });
 
   const handleCreateGame = (
+    name: string,
     numOfCards: number,
     playerLimit: number,
     response: (gameId: string) => void
   ) => {
-    const game = new Game(numOfCards, playerLimit);
+    const game = new Game(name, numOfCards, playerLimit);
     gameHandler[game.id] = game;
     game.addSpectator(socket.data.user);
     socket.join(game.id);
     socket.data.currentGameId = game.id;
     response(game.id);
+  };
+
+  const handleGetGameList = (response: (games: GameInfo[]) => void) => {
+    const games = Object.values(gameHandler).map((v) => v.Info);
+    response(games);
   };
   const handleJoinGame = (
     gameId: string,
@@ -686,6 +696,8 @@ io.on("connection", (socket: Socket) => {
   socket.on("restartGame", restartGame);
 
   socket.on("createGame", handleCreateGame);
+
+  socket.on("getGameList", handleGetGameList);
 
   socket.on("joinGame", handleJoinGame);
 

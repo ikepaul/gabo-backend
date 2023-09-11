@@ -4,6 +4,7 @@ import Player from "./Player";
 import { v4 as uuidv4 } from "uuid";
 import { toPlayerDTO } from "./PlayerDTO";
 import User from "./User";
+import GameInfo from "./GameInfo";
 
 export type GameState = "Waiting" | "Setup" | "Playing" | "Finished";
 export type Ability =
@@ -34,8 +35,9 @@ export default class Game {
   id: string;
   numOfCards: number;
   playerLimit: number;
+  name: string;
 
-  constructor(numOfCards: number, playerLimit: number) {
+  constructor(name: string, numOfCards: number, playerLimit: number) {
     if (numOfCards > maxNumOfCards) {
       numOfCards = maxNumOfCards;
     }
@@ -48,6 +50,7 @@ export default class Game {
     if (playerLimit < minPlayerLimit) {
       playerLimit = minPlayerLimit;
     }
+    this.name = name;
     this.players = [];
     this.spectators = [];
     this.activePlayerId = "";
@@ -86,6 +89,21 @@ export default class Game {
       deckSize: deck.length,
       numOfCards,
       spectators,
+    };
+  }
+
+  get Info(): GameInfo {
+    const { players, spectators, numOfCards, playerLimit, name, id } = {
+      ...structuredClone(this),
+    };
+
+    return {
+      spectatorCount: spectators.length,
+      playerCount: players.length,
+      playerLimit,
+      numOfCards,
+      name,
+      id,
     };
   }
 
