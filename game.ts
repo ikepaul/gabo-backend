@@ -72,11 +72,13 @@ export default class Game {
       deck,
       numOfCards,
       spectators,
+      id,
     } = { ...structuredClone(this) };
 
     const playersDTO = players.map((p) => toPlayerDTO(p));
 
     return {
+      id,
       state,
       players: playersDTO,
       activePlayerId,

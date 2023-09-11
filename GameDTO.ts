@@ -11,4 +11,5 @@ export default interface GameDTO {
   spectators: User[]; //List of ids
   deckSize: number;
   numOfCards: number;
+  id: string;
 }
