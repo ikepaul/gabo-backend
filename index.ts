@@ -12,6 +12,7 @@ import { DecodedIdToken, getAuth } from "firebase-admin/auth";
 import { credential } from "firebase-admin";
 import User from "./User";
 import GameInfo from "./GameInfo";
+import { ExtendedError } from "socket.io/dist/namespace";
 
 const firebaseConfig = {
   credential: credential.cert("./firebase-credentials.json"),
@@ -110,26 +111,28 @@ const io = new Server<
   cors: { origin: "*" },
 });
 
-io.use(async (socket: Socket, next) => {
+io.use(auth);
+async function auth(
+  socket: Socket,
+  next: (err?: ExtendedError | undefined) => void
+): Promise<void> {
   const idToken = socket.handshake.auth.idToken;
-  if (idToken) {
-    const appAuth = getAuth(app);
-    try {
-      const decodedToken: DecodedIdToken = await appAuth.verifyIdToken(idToken);
-      if (decodedToken.uid) {
-        const user = await appAuth.getUser(decodedToken.uid);
-        socket.data.user = user;
-        next();
-      } else {
-        next(new Error("Invalid auth-token"));
-      }
-    } catch (err) {
-      next(new Error("Invalid auth-token"));
-    }
-  } else {
+  if (!idToken) {
     next(new Error("No auth-token"));
   }
-});
+  const appAuth = getAuth(app);
+  try {
+    const decodedToken: DecodedIdToken = await appAuth.verifyIdToken(idToken);
+    if (!decodedToken.uid) {
+      next(new Error("Invalid auth-token"));
+    }
+    const user = await appAuth.getUser(decodedToken.uid);
+    socket.data.user = user;
+    next();
+  } catch (err) {
+    next(new Error("Invalid auth-token"));
+  }
+}
 
 function restartGame(gameId: string) {
   const game: Game = gameHandler[gameId];
