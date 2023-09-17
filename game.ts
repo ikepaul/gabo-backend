@@ -157,6 +157,7 @@ export default class Game {
     this.players.forEach((p) => {
       p.availableGives = [];
       p.numOfStartPeeks = numOfStartPeeks;
+      p.calledGabo = false;
     });
     this.dealCards(this.numOfCards);
     this.activePlayerId = this.players[0].user.uid;
